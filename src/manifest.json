@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "numbernavigator",
   "version": "1.0.0",
-  "description": "Repeat the numbers near the clickable areas online and navigate hands-free.",
+  "description": "Navigate hands-free by speaking numbers.",
   "permissions": [
     "activeTab",
     "scripting",
