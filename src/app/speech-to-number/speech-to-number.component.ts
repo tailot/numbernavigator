@@ -61,11 +61,13 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       .subscribe((text) => {
         this.ngZone.run(() => {
           this.recognizedText = text;
-          this.parseSpeechToNumber(text);
-          this.errorMessage = ''; 
+          this.parseSpeechToNumber(text); // This will set recognizedNumber and potentially errorMessage
+          // If recognizedNumber is null, parseSpeechToNumber should have set an errorMessage.
           if (this.recognizedNumber !== null) {
             console.log(`Number parsed: ${this.recognizedNumber}. Requesting service to conclude and restart to process command.`);
             this.speechToTextService.concludeAndRestartCurrentUtterance();
+          } else {
+            console.log(`Speech recognized: "${text}", but no valid number parsed. Error: "${this.errorMessage}"`);
           }
         });
       });
@@ -87,12 +89,62 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
           if (previousListeningState && !this.isListening) {
             console.log(`Listening has stopped. Recognized text: "${this.recognizedText}", Number: ${this.recognizedNumber}, Error: "${this.errorMessage}"`);
-            if (this.recognizedText && this.recognizedNumber !== null) {
-              console.log(`Attempting to click element number: ${this.recognizedNumber} from speech: "${this.recognizedText}"`);
 
+            if (this.recognizedNumber === 0) {
+              console.log(`Recognized number 0. Sending scrollDown command.`);
+              this.sendMessageToActiveTab({ action: "scrollDown" }, (response) => {
+                if (response) {
+                  if (response.sendMessageError) {
+                    this.errorMessage = `System error sending scrollDown: ${response.sendMessageError}`;
+                    console.warn(this.errorMessage);
+                  } else if (response.error && response.url) {
+                    this.errorMessage = `${response.error} (URL: ${response.url})`;
+                    console.warn(this.errorMessage);
+                  } else if (response.status === "Scrolled down") {
+                    this.recognizedText = '';
+                    console.log(`Content script confirmed scrollDown.`);
+                  } else if (response.status === "Error") {
+                    this.errorMessage = response.message || `Content script failed to scrollDown.`;
+                    console.warn(`Error from content script for scrollDown: ${this.errorMessage}`, response);
+                  } else {
+                    console.warn(`Unexpected response from content script for scrollDown:`, response);
+                    this.errorMessage = 'Unexpected response from page for scrollDown.';
+                  }
+                } else {
+                  console.warn(`No response received from content script for scrollDown action.`);
+                  this.errorMessage = 'No response from page for scrollDown. Ensure content script is active.';
+                }
+              });
+            } else if (this.recognizedNumber === 1) {
+              console.log(`Recognized number 1. Sending scrollUp command.`);
+              this.sendMessageToActiveTab({ action: "scrollUp" }, (response) => {
+                 if (response) {
+                  if (response.sendMessageError) {
+                    this.errorMessage = `System error sending scrollUp: ${response.sendMessageError}`;
+                    console.warn(this.errorMessage);
+                  } else if (response.error && response.url) {
+                    this.errorMessage = `${response.error} (URL: ${response.url})`;
+                    console.warn(this.errorMessage);
+                  } else if (response.status === "Scrolled up") {
+                    this.recognizedText = '';
+                    console.log(`Content script confirmed scrollUp.`);
+                  } else if (response.status === "Error") {
+                    this.errorMessage = response.message || `Content script failed to scrollUp.`;
+                    console.warn(`Error from content script for scrollUp: ${this.errorMessage}`, response);
+                  } else {
+                    console.warn(`Unexpected response from content script for scrollUp:`, response);
+                    this.errorMessage = 'Unexpected response from page for scrollUp.';
+                  }
+                } else {
+                  console.warn(`No response received from content script for scrollUp action.`);
+                  this.errorMessage = 'No response from page for scrollUp. Ensure content script is active.';
+                }
+              });
+            } else if (this.recognizedText && this.recognizedNumber !== null) { // Existing logic for other numbers (2-50)
+              console.log(`Attempting to click element number: ${this.recognizedNumber} from speech: "${this.recognizedText}"`);
               this.sendMessageToActiveTab(
                 { action: "clickElement", number: this.recognizedNumber },
-                (response) => { 
+                (response) => {
                   if (response) {
                     if (response.sendMessageError) {
                       this.errorMessage = `System error sending command: ${response.sendMessageError}`;
@@ -114,7 +166,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
                   }
                 }
               );
-            } else if (this.recognizedText && this.recognizedNumber === null) {
+            } else if (this.recognizedText && this.recognizedNumber === null) { // Parsing failed
               console.log(`Listening stopped. Recognized text: "${this.recognizedText}", but no valid number was parsed. Current error: "${this.errorMessage}".`);
             } else if (!this.recognizedText && !this.errorMessage) {
               console.log(`Listening stopped. No text was recognized. Error: "${this.errorMessage}"`);
@@ -152,7 +204,6 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.recognizedNumber = null;
     this.recognizedText = '';
     this.errorMessage = '';
-
   }
 
   toggleContentScriptNumbering(): void {
@@ -170,10 +221,10 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       this.contentScriptNumberingIntervalId = window.setInterval(() => {
         if (this.isContentScriptNumberingActive) { 
           this.sendMessageToActiveTab({ action: "numberClickables" }, (response) => {
-            if (response) console.log('Periodic numbering response:', response);
+            //if (response) console.log('Periodic numbering response:', response);
           });
         }
-      }, 9000);
+      }, 5000);
       console.log('Content script numbering activated.');
     } else {
       if (this.contentScriptNumberingIntervalId !== null) {
@@ -207,7 +258,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
               }
             });
           } else {
-            console.log('Active tab is not a standard website. Message not sent. URL:', activeTab.url);
+            //console.log('Active tab is not a standard website. Message not sent. URL:', activeTab.url);
             if (callback) {
               callback({ error: "Cannot send message to non-website tab", url: activeTab.url });
             }
@@ -231,10 +282,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     }
 
     const cleanedSpeech = speech.toLowerCase().trim();
-    console.log(`Tentativo di parsing per: "${cleanedSpeech}" (lingua: ${currentLangCode})`);
+    //console.log(`parsing: "${cleanedSpeech}" (lingua: ${currentLangCode})`);
 
     if (langMap[cleanedSpeech] !== undefined) {
       this.recognizedNumber = langMap[cleanedSpeech];
+      this.errorMessage = ''; // Clear previous error if number found
       return;
     }
 
@@ -242,21 +294,27 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     for (const word of words) {
       if (langMap[word] !== undefined) {
         this.recognizedNumber = langMap[word];
+        this.errorMessage = ''; // Clear previous error if number found
         return;
       }
     }
 
     const numericValue = parseInt(cleanedSpeech, 10);
-    if (!isNaN(numericValue) && numericValue >= 1 && numericValue <= 50) {
+    // Allow 0 for scroll commands, and 1-50 for clickable elements.
+    // The numberWordMaps already define 0-50. This parseInt is a fallback.
+    if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 50) {
+      // Check if this numeric string is explicitly defined in the map,
+      // e.g. "0" or "1" is in map, "51" might not be.
       const stringNumeric = String(numericValue);
       if (langMap[stringNumeric] === numericValue) {
         this.recognizedNumber = numericValue;
+        this.errorMessage = ''; // Clear previous error if number found
         return;
       }
     }
 
-
-    this.errorMessage = `Impossibile riconoscere un numero tra 1 e 50 da: "${speech}"`;
+    // If we reach here, no number (0-50) was parsed.
+    this.errorMessage = `Impossibile riconoscere un numero (0-50) da: "${speech}"`;
     this.recognizedNumber = null;
   }
 

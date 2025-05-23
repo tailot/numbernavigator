@@ -13,17 +13,6 @@ interface ClickableElementInfo {
     originalOverflow?: string;
 }
 
-function ensureStylesInjected() {
-    if (stylesInjected) return;
-    const styleSheet = document.createElement("link");
-    styleSheet.rel = "stylesheet";
-    styleSheet.type = "text/css";
-    styleSheet.href = chrome.runtime.getURL("content.css"); // If you have a content.css
-    document.head.appendChild(styleSheet);
-    stylesInjected = true;
-}
-
-
 function isElementVisible(el: HTMLElement): boolean {
     if (!el) return false;
     const style = window.getComputedStyle(el);
@@ -43,7 +32,6 @@ function isElementVisible(el: HTMLElement): boolean {
 
 function findAndNumberClickableElements() {
     clearNumbers();
-    ensureStylesInjected();
 
     const selectors = [
         'a[href]',
@@ -83,9 +71,12 @@ function findAndNumberClickableElements() {
             return;
         }
 
+        //Why? Start of 2
+        nextNumber++;
+
         const label = document.createElement('span');
         label.className = 'number-navigator-label';
-        label.textContent = ` (${nextNumber})`;
+        label.textContent = `{${nextNumber}}`;
         const originalPosition = getComputedStyle(element).position;
         const originalOverflow = getComputedStyle(element).overflow;
 
@@ -95,7 +86,6 @@ function findAndNumberClickableElements() {
         if (originalOverflow === 'hidden') {
             element.style.overflow = 'visible';
         }
-
 
         element.appendChild(label);
         element.dataset['numberNavigatorAssigned'] = "true";
@@ -131,11 +121,11 @@ function clearNumbers() {
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "numberClickables") {
-        console.log("NumberNavigator: Manual numbering requested.");
         findAndNumberClickableElements();
         sendResponse({ status: "Clickables numbered", count: clickableElements.length });
         return true;
     } else if (request.action === "clickElement") {
+
         const targetInfo = clickableElements.find(item => item.number === request.number);
         if (targetInfo) {
             if (document.body.contains(targetInfo.element) && isElementVisible(targetInfo.element)) {
@@ -162,17 +152,14 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         clearNumbers();
         sendResponse({ status: "Numbers cleared" });
         return true;
+    } else if (request.action === "scrollUp") {
+        window.scrollBy(0, -window.innerHeight * 0.8);
+        sendResponse({ status: "Scrolled up" });
+        return true;
+    } else if (request.action === "scrollDown") {
+        window.scrollBy(0, window.innerHeight * 0.8);
+        sendResponse({ status: "Scrolled down" });
+        return true;
     }
     return false;
 });
-
-function startAutomaticNumbering() {
-    if (numberingInterval !== undefined) {
-        clearInterval(numberingInterval);
-    }
-    console.log("NumberNavigator: Starting automatic numbering every 5 seconds.");
-    findAndNumberClickableElements();
-    numberingInterval = window.setInterval(() => {
-        findAndNumberClickableElements();
-    }, 7000);
-}

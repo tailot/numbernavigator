@@ -1,3 +1,8 @@
+<h1>Number Navigator</h1>
+
+<div class="warning-message">
+  <strong>Warning:</strong> The extension manipulates page content. Caution is advised when activating this feature during important work sessions.
+</div>
 <div class="speech-container">
 
   @if (!isBrowserSupported) {
@@ -12,6 +17,7 @@
 </div>
   @if (isBrowserSupported) {
     <div>
+    <hr />
     <div class="controls">
       <label for="language-select">🇺🇸🇮🇹🇪🇸🇫🇷🇩🇪🇸🇦🇯🇵</label>
       <select id="language-select" [ngModel]="selectedLanguage" (ngModelChange)="onLanguageChange($event)">
@@ -22,8 +28,12 @@
         }   
       </select>
     </div>
-
+    <hr />
 
   
 </div>
   }
+  <p class="instructions">
+    The functionality is activated using the 'On' button at the top. Once active, the extension will display numbers next to interactive elements on the page. You can interact with these elements by speaking the corresponding number. Additionally, the voice commands '0' (zero) and '1' (one) allow scrolling the page down and up, respectively.
+  </p>
+</div>
