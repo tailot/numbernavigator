@@ -5,8 +5,7 @@
   "description": "Navigate hands-free by speaking numbers.",
   "permissions": [
     "activeTab",
-    "scripting",
-    "storage"
+    "scripting"
   ],
   "background": {
     "service_worker": "background.js"
