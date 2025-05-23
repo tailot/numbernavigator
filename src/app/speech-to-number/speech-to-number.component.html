@@ -1,45 +1,52 @@
-<h1>Number Navigator</h1>
+<main>
+  <header>
+    <h1>Number Navigator</h1>
+  </header>
 
-<div class="warning-message">
-  <strong>Warning:</strong> The extension manipulates page content. Caution is advised when activating this feature during important work sessions.
-</div>
-<div class="speech-container">
-
-  @if (!isBrowserSupported) {
-    <div class="error-message">
-      <p>⚠️ {{ errorMessage }}</p>
+  <section class="status-messages">
+    <div class="warning-message">
+      <strong>Warning:</strong> The extension manipulates page content. Caution is advised when activating this feature during important work sessions.
     </div>
-  }
-<div>
-  <button class="start-button"
-          (click)="toggleContentScriptNumbering()"
-          [disabled]="!isOnline">
-    {{ isContentScriptNumberingActive ? 'Off' : 'On' }}
-  </button>
-  @if (!isOnline) {
-    <p class="offline-message">Connection required to enable listening.</p>
-  }
-</div>
-  @if (isBrowserSupported) {
+    @if (!isBrowserSupported) {
+      <div class="error-message">
+        <p>⚠️ {{ errorMessage }}</p>
+      </div>
+    }
+    @if (!isOnline) {
+      <p class="offline-message">Connection required to enable listening.</p>
+    }
+  </section>
+
+  <section class="controls-section">
     <div>
-    <hr />
-    <div class="controls">
-      <label for="language-select">🇺🇸🇮🇹🇪🇸🇫🇷🇩🇪🇸🇦🇯🇵</label>
-      <select id="language-select" [ngModel]="selectedLanguage" (ngModelChange)="onLanguageChange($event)">
-        @for (lang of languages; track lang.code) {
-          <option [value]="lang.code">
-            {{ lang.name }}
-          </option>
-        }   
-      </select>
+      <button class="start-button"
+              (click)="toggleContentScriptNumbering()"
+              [disabled]="!isOnline">
+        {{ isContentScriptNumberingActive ? 'Off' : 'On' }}
+      </button>
     </div>
-    <hr />
+    @if (isBrowserSupported) {
+      <div>
+        <hr />
+        <div class="controls">
+          <label for="language-select">🇺🇸🇮🇹🇪🇸🇫🇷🇩🇪🇸🇦🇯🇵</label>
+          <select id="language-select" [ngModel]="selectedLanguage" (ngModelChange)="onLanguageChange($event)">
+            @for (lang of languages; track lang.code) {
+              <option [value]="lang.code">
+                {{ lang.name }}
+              </option>
+            }
+          </select>
+        </div>
+        <hr />
+      </div>
+    }
+  </section>
 
-  
-</div>
-  }
-  <p class="instructions">
-    The functionality is activated using the 'On' button at the top. Once active, the extension will display numbers next to interactive elements on the page. You can interact with these elements by speaking the corresponding number. Additionally, the voice commands '0' (zero) and '1' (one) allow scrolling the page down and up, respectively.
-    Please note that the extension operates only on the current active tab where it has been enabled. For normal operation, ensure this tab remains open.
-  </p>
-</div>
+  <section class="instructions-section">
+    <p class="instructions">
+      The functionality is activated using the 'On' button at the top. Once active, the extension will display numbers next to interactive elements on the page. You can interact with these elements by speaking the corresponding number. Additionally, the voice commands '0' (zero) and '1' (one) allow scrolling the page down and up, respectively.
+      Please note that the extension operates only on the current active tab where it has been enabled. For normal operation, ensure this tab remains open.
+    </p>
+  </section>
+</main>

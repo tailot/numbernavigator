@@ -1,38 +1,163 @@
-h1
-  text-align: center
+// Variables
+$font-family-base: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol"
+$font-size-base: 16px
+$line-height-base: 1.6
 
-.warning-message
-  background-color: #fff3cd
-  color: #856404
-  border: 1px solid #ffeeba
-  padding: 10px
-  margin-bottom: 15px
-  text-align: center
-  border-radius: 5px
+$color-background: #f4f7f9
+$color-text: #333
+$color-primary: #007bff
+$color-primary-hover: #0056b3
+$color-warning-bg: #fff3cd
+$color-warning-text: #856404
+$color-warning-border: #ffeeba
+$color-error-bg: #f8d7da
+$color-error-text: #721c24
+$color-error-border: #f5c6cb
+$color-offline-text: #dc3545 // A distinct red for offline message
 
-.speech-container
-  text-align: center
+$border-radius-base: 0.3rem
+$padding-base: 1rem
+$margin-base: 1rem
 
-  // .error-message is a child, its <p> tag's text will be centered by inheritance.
-  // The div wrapping the button: its content (the button) will be centered.
-  // The div wrapping controls: its content (hr, .controls div, hr) will be centered.
+// Global Resets and Base Styles
+*
+  box-sizing: border-box
 
-  .controls
+body // Applied if component is used in isolation, good for consistency
+  font-family: $font-family-base
+  font-size: $font-size-base
+  line-height: $line-height-base
+  color: $color-text
+  background-color: $color-background
+  margin: 0
+  padding: $padding-base
+
+// Component Styles
+main
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: $margin-base * 1.5
+  padding: $padding-base
+  max-width: 700px // Limits width for better readability on large screens
+  margin: $margin-base auto // Centers the main container
+  background-color: #fff // White background for the component itself
+  border-radius: $border-radius-base * 2
+  box-shadow: 0 4px 8px rgba(0,0,0,0.1)
+
+header
+  width: 100%
+  h1
+    text-align: center
+    color: $color-primary
+    font-size: 2rem
+    font-weight: 600
+    margin-bottom: 0 // Adjust spacing as part of the section's gap
+
+.status-messages
+  display: flex
+  flex-direction: column
+  gap: $margin-base
+  width: 100%
+  padding: 0 $padding-base // Padding for messages within this section
+
+  .warning-message, .error-message
+    padding: $padding-base
+    border: 1px solid
+    border-radius: $border-radius-base
+    text-align: center
+
+  .warning-message
+    background-color: $color-warning-bg
+    color: $color-warning-text
+    border-color: $color-warning-border
+    strong
+      font-weight: 600
+
+  .error-message
+    background-color: $color-error-bg
+    color: $color-error-text
+    border-color: $color-error-border
+    p
+      margin: 0 // Remove default paragraph margin
+
+  .offline-message
+    color: $color-offline-text
+    font-size: 0.9em
+    text-align: center
+    margin-top: 0.5rem // Small top margin
+
+.controls-section
+  display: flex
+  flex-direction: column
+  align-items: center
+  gap: $margin-base
+  width: 100%
+  padding: $padding-base
+  border-top: 1px solid #eee // Modern separator
+  border-bottom: 1px solid #eee // Modern separator
+
+  div // Container for button and for controls
+    display: flex
+    flex-direction: column
+    align-items: center
+    gap: $margin-base
+
+  .start-button
+    background-color: $color-primary
+    color: white
+    border: none
+    padding: 0.75rem 1.5rem
+    border-radius: $border-radius-base
+    font-size: 1.1rem
+    font-weight: 500
+    cursor: pointer
+    transition: background-color 0.2s ease-in-out
+
+    &:hover
+      background-color: $color-primary-hover
+
+    &:disabled
+      background-color: #ccc
+      cursor: not-allowed
+      opacity: 0.7
+
+  .controls // For language select
     display: flex
     justify-content: center
     align-items: center
-    gap: 8px
+    gap: 0.5rem // Smaller gap for label and select
+
+    label
+      font-size: 1.5rem // Make emoji flags a bit larger
+
+    select#language-select
+      padding: 0.5rem 0.75rem
+      border-radius: $border-radius-base
+      border: 1px solid #ccc
+      background-color: white
+      font-size: 1rem
+      cursor: pointer
+
+      &:focus
+        outline: none
+        border-color: $color-primary
+        box-shadow: 0 0 0 0.2rem rgba($color-primary, 0.25)
+
+.instructions-section
+  width: 100%
+  padding: 0 $padding-base $padding-base // Padding, especially at the bottom
 
   .instructions
-    margin-top: 20px
-    text-align: center // Explicitly centered, though parent also has text-align: center
-    line-height: 1.6
+    text-align: left // More readable for longer text
+    font-size: 0.95rem
+    color: lighten($color-text, 20%) // Slightly lighter text for instructions
+    line-height: 1.7
+    background-color: #f9f9f9 // Very light grey background for the block
+    padding: $padding-base
+    border-radius: $border-radius-base
+    border: 1px solid #eee
 
-.offline-message
-  color: red;
-  font-size: 0.9em;
-  margin-top: 5px;
-
-.start-button:disabled
-  opacity: 0.6;
-  cursor: not-allowed;
+// Remove default hr styling if any were to remain (they are removed from HTML)
+hr
+  display: none
