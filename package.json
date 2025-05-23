@@ -7,6 +7,7 @@
     "build:content-script": "tsc ./src/content.ts --outDir ./dist/numbernavigator/browser --target es2020 --module commonjs --lib \"ES2020\",\"DOM\"",
     "build:background-script": "tsc ./src/background.ts --outDir ./dist/numbernavigator/browser --target es2020 --module commonjs --lib \"ES2020\",\"DOM\"",
     "build": "ng build && npm run build:background-script && npm run build:content-script",
+    "zip": "cd dist/numbernavigator/browser && zip -r ../numbernavigator.zip .",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
   },
