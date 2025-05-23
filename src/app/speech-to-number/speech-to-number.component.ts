@@ -302,9 +302,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     const numericValue = parseInt(cleanedSpeech, 10);
     // Allow 0 for scroll commands, and 1-50 for clickable elements.
     // The numberWordMaps already define 0-50. This parseInt is a fallback.
-    if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 50) {
+    if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 200) {
       // Check if this numeric string is explicitly defined in the map,
-      // e.g. "0" or "1" is in map, "51" might not be.
+      // e.g. "0" or "1" is in map, "200" might not be.
       const stringNumeric = String(numericValue);
       if (langMap[stringNumeric] === numericValue) {
         this.recognizedNumber = numericValue;
@@ -313,8 +313,8 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       }
     }
 
-    // If we reach here, no number (0-50) was parsed.
-    this.errorMessage = `Impossibile riconoscere un numero (0-50) da: "${speech}"`;
+    // If we reach here, no number (0-200) was parsed.
+    this.errorMessage = `Impossibile riconoscere un numero (0-200) da: "${speech}"`;
     this.recognizedNumber = null;
   }
 
