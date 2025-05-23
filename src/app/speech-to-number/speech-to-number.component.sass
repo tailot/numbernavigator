@@ -28,8 +28,11 @@ h1
     text-align: center // Explicitly centered, though parent also has text-align: center
     line-height: 1.6
 
-// Styles for .error-message, .start-button etc. can be added here if needed
-// For example, if .error-message needs specific styling beyond what it has:
-// .error-message
-//   p
-//     color: red // Example
+.offline-message
+  color: red;
+  font-size: 0.9em;
+  margin-top: 5px;
+
+.start-button:disabled
+  opacity: 0.6;
+  cursor: not-allowed;

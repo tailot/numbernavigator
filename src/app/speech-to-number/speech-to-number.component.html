@@ -11,9 +11,14 @@
     </div>
   }
 <div>
-  <button class="start-button" (click)="toggleContentScriptNumbering()">
+  <button class="start-button"
+          (click)="toggleContentScriptNumbering()"
+          [disabled]="!isOnline">
     {{ isContentScriptNumberingActive ? 'Off' : 'On' }}
   </button>
+  @if (!isOnline) {
+    <p class="offline-message">Connection required to enable listening.</p>
+  }
 </div>
   @if (isBrowserSupported) {
     <div>

@@ -1,4 +1,4 @@
-import { Component, OnInit, OnDestroy, NgZone } from '@angular/core';
+import { Component, OnInit, OnDestroy, NgZone, HostListener } from '@angular/core';
 import { SpeechToTextService } from '../services/speech-to-text.service';
 import { numberWordMaps } from './number-words';
 import { Subscription } from 'rxjs';
@@ -25,6 +25,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     { name: '日本語 (Japanese)', code: 'ja' },
   ];
 
+  isOnline: boolean = navigator.onLine;
   selectedLanguage: string = this.languages[0].code; // Default a Inglese
   recognizedText: string = '';
   recognizedNumber: number | null = null;
@@ -50,6 +51,18 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     if (!this.isBrowserSupported) {
       this.errorMessage = 'Il riconoscimento vocale non è supportato dal tuo browser.';
     }
+  }
+
+  @HostListener('window:online')
+  onNetworkOnline(): void {
+    this.isOnline = true;
+    console.log('Connection is back online.');
+  }
+
+  @HostListener('window:offline')
+  onNetworkOffline(): void {
+    this.isOnline = false;
+    console.log('Connection lost. Offline mode.');
   }
 
   ngOnInit(): void {
