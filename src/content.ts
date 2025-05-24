@@ -1,18 +1,79 @@
+/**
+ * @file content.ts
+ * @description This content script runs in the context of web pages. It is responsible for
+ * identifying and numbering clickable elements on the page, and then performing actions
+ * (like click, scroll) based on messages received from the extension's popup/background script.
+ * It injects labels with numbers next to clickable elements and manages their state.
+ */
+
+/**
+ * @var {ClickableElementInfo[]} clickableElements
+ * @description Array to store information about each numbered clickable element on the page.
+ * Each element in the array is an object of type `ClickableElementInfo`.
+ * @default []
+ */
 let clickableElements: ClickableElementInfo[] = [];
+
+/**
+ * @var {number} nextNumber
+ * @description Counter for assigning unique numbers to clickable elements. It increments
+ * each time an element is successfully numbered.
+ * @default 1
+ */
 let nextNumber = 1;
+
+/**
+ * @const {number} MAX_ELEMENTS_TO_NUMBER
+ * @description The maximum number of elements that will be numbered on a page.
+ * This is a safeguard against performance issues on pages with an excessive number of interactive elements.
+ * @default 200
+ */
 const MAX_ELEMENTS_TO_NUMBER = 200;
-let stylesInjected = false;
 
-let numberingInterval: number | undefined;
+/**
+ * @var {boolean} stylesInjected
+ * @description Flag to track if the necessary CSS styles for the number labels have been injected into the page.
+ * (Note: This variable is declared but not currently used in the provided script. It might be for future use.)
+ * @default false
+ */
+let stylesInjected = false; // TODO: This variable is declared but not used. Consider removing or implementing its use.
 
+/**
+ * @var {number | undefined} numberingInterval
+ * @description Stores the ID of the interval timer if periodic re-numbering is active.
+ * (Note: This variable is declared but not currently used for setting or clearing an interval in the provided script.
+ * It might be intended for a feature that automatically re-numbers elements, e.g., on dynamic content changes,
+ * but the current implementation relies on explicit "numberClickables" messages.)
+ * @default undefined
+ */
+let numberingInterval: number | undefined; // TODO: This variable is declared but not used for interval management.
+
+/**
+ * @interface ClickableElementInfo
+ * @description Defines the structure for storing information about a numbered clickable element.
+ */
 interface ClickableElementInfo {
+    /** @property {HTMLElement} element - The HTML element that was identified as clickable. */
     element: HTMLElement;
+    /** @property {number} number - The number assigned to this element. */
     number: number;
+    /** @property {HTMLElement} labelElement - The `<span>` element created to display the number label. */
     labelElement: HTMLElement;
+    /** @property {string} [originalPosition] - Stores the original `position` style of the element if it was changed (e.g., from 'static' to 'relative') to correctly position the label. */
     originalPosition?: string;
+    /** @property {string} [originalOverflow] - Stores the original `overflow` style of the element if it was changed (e.g., from 'hidden' to 'visible') to ensure the label is visible. */
     originalOverflow?: string;
 }
 
+/**
+ * @function isElementVisible
+ * @param {HTMLElement} el - The HTML element to check.
+ * @description Checks if an HTML element is currently visible in the viewport.
+ * An element is considered visible if it's not `display: none`, `visibility: hidden`,
+ * has opacity greater than 0, and its bounding box has a width and height greater than 0
+ * and intersects with the viewport.
+ * @returns {boolean} True if the element is visible, false otherwise.
+ */
 function isElementVisible(el: HTMLElement): boolean {
     if (!el) return false;
     const style = window.getComputedStyle(el);
@@ -30,6 +91,18 @@ function isElementVisible(el: HTMLElement): boolean {
     );
 }
 
+/**
+ * @function findAndNumberClickableElements
+ * @description Finds all clickable elements on the page, assigns them a number,
+ * and displays a label with that number next to each element.
+ * It first clears any existing numbers. Then, it queries the DOM for elements matching
+ * a list of selectors for common interactive HTML elements and ARIA roles.
+ * For each visible element that hasn't already been numbered and is not a child of an already numbered element,
+ * it assigns a number, creates a label `<span>`, potentially adjusts the element's
+ * `position` and `overflow` styles to ensure the label is visible, and stores the element's info.
+ * The process stops if `MAX_ELEMENTS_TO_NUMBER` is reached.
+ * @returns {void}
+ */
 function findAndNumberClickableElements() {
     clearNumbers();
 
@@ -115,6 +188,14 @@ function findAndNumberClickableElements() {
     });
 }
 
+/**
+ * @function clearNumbers
+ * @description Removes all number labels from the page and resets the state.
+ * It iterates through the `clickableElements` array, removes each label `<span>`
+ * from the DOM, and restores any modified `position` or `overflow` styles on the
+ * original elements. Finally, it clears the `clickableElements` array and resets `nextNumber`.
+ * @returns {void}
+ */
 function clearNumbers() {
     clickableElements.forEach(info => {
         if (info.labelElement && info.labelElement.parentNode) {
@@ -133,6 +214,24 @@ function clearNumbers() {
     nextNumber = 1;
 }
 
+/**
+ * @listens chrome.runtime.onMessage
+ * @description Listener for messages sent from other parts of the extension (e.g., popup, background script).
+ * It handles different actions based on the `request.action` property:
+ *  - `"numberClickables"`: Calls `findAndNumberClickableElements()` and responds with status and count.
+ *  - `"clickElement"`: Finds the element associated with `request.number`, focuses and clicks it.
+ *                      If the element is a `<select>`, it also dispatches a 'mousedown' event to potentially open the dropdown.
+ *                      Responds with status ("Clicked" or "Error") and clears numbers.
+ *  - `"clearNumbers"`: Calls `clearNumbers()` and responds with status.
+ *  - `"scrollUp"`: Scrolls the window up by 80% of the viewport height. Responds with status.
+ *  - `"scrollDown"`: Scrolls the window down by 80% of the viewport height. Responds with status.
+ * The listener returns `true` for asynchronous message handling to keep the message channel open for `sendResponse`.
+ * @param {any} request - The message object received. Expected to have an `action` property (string)
+ *                        and potentially other properties like `number` (number).
+ * @param {chrome.runtime.MessageSender} sender - Information about the script that sent the message.
+ * @param {(response: any) => void} sendResponse - Function to call to send a response back to the sender.
+ * @returns {boolean} True if `sendResponse` will be called asynchronously, false otherwise.
+ */
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "numberClickables") {
         findAndNumberClickableElements();

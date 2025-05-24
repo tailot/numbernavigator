@@ -1,13 +1,36 @@
+/**
+ * @file speech-to-number.component.ts
+ * @description This file defines the SpeechToNumberComponent, the core UI and logic for
+ * the speech-to-number conversion feature. It integrates with SpeechToTextService
+ * to capture voice input, parses the recognized speech into numbers using numberWordMaps,
+ * and communicates with the content script to interact with web pages (e.g., click elements, scroll).
+ * It also manages UI elements like language selection, start/stop buttons, and status messages.
+ */
 import { Component, OnInit, OnDestroy, NgZone, HostListener } from '@angular/core';
 import { SpeechToTextService } from '../services/speech-to-text.service';
 import { numberWordMaps } from './number-words';
 import { Subscription } from 'rxjs';
 import { FormsModule } from '@angular/forms';
+
+/**
+ * @interface LanguageOption
+ * @description Defines the structure for a language option in the selection dropdown.
+ */
 interface LanguageOption {
+  /** @property {string} name - The display name of the language (e.g., "English", "Italiano"). */
   name: string;
+  /** @property {string} code - The language code (e.g., "en", "it") used by the Speech Recognition API. */
   code: string;
 }
 
+/**
+ * @class SpeechToNumberComponent
+ * @implements {OnInit}
+ * @implements {OnDestroy}
+ * @description Manages the speech-to-number conversion functionality.
+ * This component handles user interactions, speech recognition, number parsing,
+ * and communication with content scripts for web page interactions.
+ */
 @Component({
   selector: 'app-speech-to-number',
   imports: [FormsModule],
@@ -15,6 +38,9 @@ interface LanguageOption {
   styleUrls: ['./speech-to-number.component.sass'],
 })
 export class SpeechToNumberComponent implements OnInit, OnDestroy {
+  /**
+   * @property {LanguageOption[]} languages - Array of available languages for speech recognition.
+   */
   languages: LanguageOption[] = [
     { name: 'English', code: 'en' },
     { name: 'Italiano', code: 'it' },
@@ -25,23 +51,87 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     { name: '日本語 (Japanese)', code: 'ja' },
   ];
 
+  /**
+   * @property {boolean} isOnline - Indicates if the browser is currently online.
+   * Initialized using `navigator.onLine`. Updated by `HostListener` for 'online'/'offline' events.
+   */
   isOnline: boolean = navigator.onLine;
+  /**
+   * @property {string} selectedLanguage - The language code of the currently selected language for speech recognition.
+   * @default 'en' (English)
+   */
   selectedLanguage: string = this.languages[0].code; // Default a Inglese
+  /**
+   * @property {string} recognizedText - The raw text transcript received from the speech recognition service.
+   * @default ''
+   */
   recognizedText: string = '';
+  /**
+   * @property {number | null} recognizedNumber - The number parsed from `recognizedText`, or null if parsing fails.
+   * @default null
+   */
   recognizedNumber: number | null = null;
+  /**
+   * @property {string} errorMessage - Stores error messages related to speech recognition or command execution.
+   * @default ''
+   */
   errorMessage: string = '';
+  /**
+   * @property {boolean} isListening - Flag indicating if the speech recognition service is currently active.
+   * @default false
+   */
   isListening: boolean = false;
+  /**
+   * @property {boolean} isBrowserSupported - Flag indicating if the browser supports the Speech Recognition API.
+   * Set in the constructor based on `SpeechToTextService.isBrowserSupported()`.
+   * @default true
+   */
   isBrowserSupported: boolean = true;
 
+  /**
+   * @property {boolean} isContentScriptNumberingActive - Flag indicating if the content script should be actively numbering clickable elements on the page.
+   * @default false
+   */
   isContentScriptNumberingActive: boolean = false;
+  /**
+   * @private
+   * @property {number | null} contentScriptNumberingIntervalId - Stores the ID of the interval timer used for periodic re-numbering by the content script.
+   * Null when numbering is inactive.
+   * @default null
+   */
   private contentScriptNumberingIntervalId: number | null = null;
 
+  /**
+   * @private
+   * @property {Subscription} speechSubscription - RxJS subscription to the speech recognition results observable from `SpeechToTextService`.
+   */
   private speechSubscription!: Subscription;
+  /**
+   * @private
+   * @property {Subscription} errorSubscription - RxJS subscription to the error observable from `SpeechToTextService`.
+   */
   private errorSubscription!: Subscription;
+  /**
+   * @private
+   * @property {Subscription} listeningStateSubscription - RxJS subscription to the listening state observable from `SpeechToTextService`.
+   */
   private listeningStateSubscription!: Subscription;
 
+  /**
+   * @private
+   * @readonly
+   * @property {object} fullNumberWordMaps - A local reference to the `numberWordMaps` imported constant,
+   * containing language-specific mappings of number words to numeric values.
+   */
   private readonly fullNumberWordMaps = numberWordMaps;
 
+  /**
+   * @constructor
+   * @param {SpeechToTextService} speechToTextService - Service for speech-to-text conversion.
+   * @param {NgZone} ngZone - Angular NgZone for running callbacks within Angular's change detection scope.
+   * @description Initializes the component, checks for browser support for speech recognition,
+   * and sets an error message if not supported.
+   */
   constructor(
     private speechToTextService: SpeechToTextService,
     private ngZone: NgZone
@@ -53,18 +143,37 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * @method onNetworkOnline
+   * @listens window:online
+   * @description Host listener that updates `isOnline` to true when the browser comes online.
+   * @returns {void}
+   */
   @HostListener('window:online')
   onNetworkOnline(): void {
     this.isOnline = true;
     console.log('Connection is back online.');
   }
 
+  /**
+   * @method onNetworkOffline
+   * @listens window:offline
+   * @description Host listener that updates `isOnline` to false when the browser goes offline.
+   * @returns {void}
+   */
   @HostListener('window:offline')
   onNetworkOffline(): void {
     this.isOnline = false;
     console.log('Connection lost. Offline mode.');
   }
 
+  /**
+   * @method ngOnInit
+   * @description Angular lifecycle hook. Subscribes to speech recognition service observables
+   * (speech results, errors, listening state) to update component state and trigger actions.
+   * Handles logic for sending commands (scroll, click) to the content script based on recognized numbers.
+   * @returns {void}
+   */
   ngOnInit(): void {
     console.log('SpeechToNumberComponent ngOnInit');
     if (!this.isBrowserSupported) return;
@@ -192,6 +301,13 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       });
   }
 
+  /**
+   * @method startRecognition
+   * @description Starts the speech recognition process.
+   * Resets error messages, recognized text, and number. Calls `SpeechToTextService.startListening`.
+   * Does nothing if browser is not supported or already listening.
+   * @returns {void}
+   */
   startRecognition(): void {
     if (!this.isBrowserSupported || this.isListening) return;
     this.errorMessage = '';
@@ -200,11 +316,24 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.speechToTextService.startListening(this.selectedLanguage);
   }
 
+  /**
+   * @method stopRecognition
+   * @description Stops the speech recognition process by calling `SpeechToTextService.stopListening`.
+   * Does nothing if browser is not supported or not currently listening.
+   * @returns {void}
+   */
   stopRecognition(): void {
     if (!this.isBrowserSupported || !this.isListening) return;
     this.speechToTextService.stopListening();
   }
 
+  /**
+   * @method onLanguageChange
+   * @param {string} newLanguageCode - The new language code selected by the user.
+   * @description Handles changes in language selection. Updates `selectedLanguage`.
+   * Stops current recognition if active, and resets component state (text, number, error).
+   * @returns {void}
+   */
   onLanguageChange(newLanguageCode: string): void {
     this.selectedLanguage = newLanguageCode;
 
@@ -219,6 +348,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.errorMessage = '';
   }
 
+  /**
+   * @method toggleContentScriptNumbering
+   * @description Toggles the activation state of content script numbering for clickable elements.
+   * If activated, sends "numberClickables" message to the content script and starts periodic re-numbering.
+   * Starts speech recognition if not already listening.
+   * If deactivated, clears any existing interval, sends "clearNumbers" message, and stops recognition if active.
+   * @returns {void}
+   */
   toggleContentScriptNumbering(): void {
     this.isContentScriptNumberingActive = !this.isContentScriptNumberingActive;
     if (this.isContentScriptNumberingActive) {
@@ -254,6 +391,16 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     }
   }
 
+  /**
+   * @private
+   * @method sendMessageToActiveTab
+   * @param {any} message - The message object to send to the content script.
+   * @param {(response: any) => void} [callback] - Optional callback function to handle the response from the content script.
+   * The callback receives the response or an error object if message sending fails.
+   * @description Sends a message to the content script of the currently active tab using `chrome.tabs.sendMessage`.
+   * Only sends messages to tabs with http/https URLs. Handles errors during message sending.
+   * @returns {void}
+   */
   private sendMessageToActiveTab(message: any, callback?: (response: any) => void): void {
     if (typeof chrome !== 'undefined' && chrome.tabs) {
       chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
@@ -284,6 +431,18 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       console.warn('Chrome tabs API not available. Not running in extension context or missing permissions?');
     }
   }
+
+  /**
+   * @private
+   * @method parseSpeechToNumber
+   * @param {string} speech - The speech transcript to parse.
+   * @description Parses the given speech string to extract a number based on the selected language.
+   * Uses `fullNumberWordMaps` for word-to-number conversion.
+   * Also attempts `parseInt` as a fallback for numeric strings.
+   * Sets `recognizedNumber` and `errorMessage` based on parsing result.
+   * Only considers numbers between 0 and 200 (inclusive) as valid.
+   * @returns {void}
+   */
   private parseSpeechToNumber(speech: string): void {
     const currentLangCode = this.selectedLanguage.split('-')[0]; 
     const langMap = this.fullNumberWordMaps[currentLangCode];
@@ -331,6 +490,13 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.recognizedNumber = null;
   }
 
+  /**
+   * @method ngOnDestroy
+   * @description Angular lifecycle hook. Unsubscribes from all RxJS subscriptions
+   * to prevent memory leaks. Stops speech recognition if active.
+   * Clears the content script numbering interval and any displayed numbers on the page.
+   * @returns {void}
+   */
   ngOnDestroy(): void {
     this.speechSubscription?.unsubscribe();
     this.errorSubscription?.unsubscribe();

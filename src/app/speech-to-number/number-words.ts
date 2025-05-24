@@ -1,3 +1,36 @@
+/**
+ * @file number-words.ts
+ * @description This file exports a constant `numberWordMaps` which contains mappings of number words
+ * (e.g., "one", "two", "cento") to their numerical equivalents for various supported languages.
+ * This is used by the SpeechToNumberComponent to convert spoken number words into digits.
+ * Each language has its own map, and each map includes common number words and their numeric values
+ * up to 200, including variations in spelling or phrasing (e.g., "twenty one" vs "twenty-one").
+ * It also includes direct string-to-number mapping for digits like "0" to 0, "1" to 1, etc., for each language.
+ */
+
+/**
+ * @constant numberWordMaps
+ * @type {{ [key: string]: { [word: string]: number } }}
+ * @description A multi-language dictionary mapping spoken number words to their numeric values.
+ * The outer keys are language codes (e.g., 'en', 'it', 'es', 'fr', 'de', 'ar', 'ja').
+ * Each inner object is a dictionary where keys are number words (strings) and values are their corresponding numbers.
+ * This includes:
+ *  - Standard number words (e.g., "zero", "one", "eleven", "twenty", "hundred").
+ *  - Compound numbers (e.g., "twenty-one", "one hundred and one").
+ *  - Variations in phrasing (e.g., "twenty one" vs "twenty-one", "cento uno" vs "centouno").
+ *  - Numeric strings (e.g., "0", "1", "10", "100") to their integer values.
+ *  - For Arabic, includes both standard Arabic numerals and Eastern Arabic numerals.
+ *  - For Japanese, includes Hiragana, Katakana, and Kanji representations of numbers.
+ *
+ * Supported languages and their specific considerations:
+ * - **en (English):** Covers numbers 0-200, including hyphenated and non-hyphenated forms.
+ * - **it (Italian):** Covers numbers 0-200, including common single-word and multi-word forms.
+ * - **es (Spanish):** Covers numbers 0-200, including forms with "y" and hyphenated alternatives.
+ * - **fr (French):** Covers numbers 0-200, including specific French numbering rules (e.g., "soixante-dix", "quatre-vingts").
+ * - **de (German):** Covers numbers 0-200, including compound words like "einundzwanzig".
+ * - **ar (Arabic):** Covers numbers 0-200, including common word forms and both Western and Eastern Arabic numeral strings.
+ * - **ja (Japanese):** Covers numbers 0-200, including Hiragana, Katakana, and Kanji representations, and variations in readings.
+ */
 export const numberWordMaps: { [key: string]: { [word: string]: number } } = {
   en: { // English
     "zero": 0, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10,
