@@ -34,26 +34,42 @@ function findAndNumberClickableElements() {
     clearNumbers();
 
     const selectors = [
-        'a[href]',
-        'button',
-        'input[type="button"]',
-        'input[type="submit"]',
-        'input[type="reset"]',
-        'input[type="checkbox"]',
-        'input[type="radio"]',
-        'select',
-        //'textarea',
+        // 1. Standard HTML interactive elements
+        'a[href]',                            // Links with a destination
+        'button',                             // Standard buttons
+        'input[type="button"]',               // Input elements styled as buttons
+        'input[type="submit"]',               // Input elements for submitting forms
+        'input[type="reset"]',                // Input elements for resetting forms
+        'input[type="checkbox"]',             // Checkbox input
+        'input[type="radio"]',                // Radio button input
+        'input[type="file"]',                 // File input (opens a dialog)
+        'input[type="image"]',                // Image input (acts as a button)
+        'select',                             // Dropdown select lists
+        'textarea',                           // Text areas (interactive for input)
+        'details summary',                    // The clickable part of a details/summary widget
+
+        // 2. ARIA roles for custom interactive elements
+        // These roles indicate that an element behaves like a certain control type,
+        // even if it's not a standard HTML element (e.g., a div styled as a button).
         '[role="button"]',
         '[role="link"]',
         '[role="menuitem"]',
+        '[role="menuitemcheckbox"]',          // Checkbox item within a menu
+        '[role="menuitemradio"]',           // Radio button item within a menu
         '[role="tab"]',
         '[role="checkbox"]',
         '[role="radio"]',
-        '[role="option"]',
-        '[role="treeitem"]',
-        '[tabindex]:not([tabindex="-1"])', // Elements that are focusable
-        'details summary',
-        //'[contenteditable="true"]'
+        '[role="option"]',                    // Selectable option in a listbox or combobox
+        '[role="treeitem"]',                // Item in a tree structure that can be clicked
+        '[role="combobox"]',                  // Combobox (input + dropdown)
+        '[role="slider"]',                    // Slider control
+        '[role="spinbutton"]',                // Numeric input with up/down buttons
+        '[role="switch"]',                    // On/off switch
+
+        // 3. Other mechanisms for interactivity
+        '[tabindex]:not([tabindex="-1"])',    // Elements made focusable (and thus often clickable)
+                                              // Excludes -1 which means focusable only via script.
+        '[contenteditable="true"]'            // Elements whose content is editable (interactive for input)
     ];
 
     const elements = document.querySelectorAll(selectors.join(', '));
