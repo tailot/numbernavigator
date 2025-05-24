@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "numbernavigator",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Navigate hands-free by speaking numbers.",
   "permissions": [
     "activeTab",
