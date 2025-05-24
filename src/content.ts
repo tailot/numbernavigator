@@ -45,7 +45,6 @@ function findAndNumberClickableElements() {
         'input[type="file"]',                 // File input (opens a dialog)
         'input[type="image"]',                // Image input (acts as a button)
         'select',                             // Dropdown select lists
-        'textarea',                           // Text areas (interactive for input)
         'details summary',                    // The clickable part of a details/summary widget
 
         // 2. ARIA roles for custom interactive elements
@@ -69,7 +68,6 @@ function findAndNumberClickableElements() {
         // 3. Other mechanisms for interactivity
         '[tabindex]:not([tabindex="-1"])',    // Elements made focusable (and thus often clickable)
                                               // Excludes -1 which means focusable only via script.
-        '[contenteditable="true"]'            // Elements whose content is editable (interactive for input)
     ];
 
     const elements = document.querySelectorAll(selectors.join(', '));
