@@ -65,7 +65,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
    * @property {string} recognizedText - The raw text transcript received from the speech recognition service.
    * @default ''
    */
-  recognizedText: string = '';
+  recognizedText: string | null = null;
   /**
    * @property {number | null} recognizedNumber - The number parsed from `recognizedText`, or null if parsing fails.
    * @default null
@@ -223,7 +223,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
                     this.errorMessage = `${response.error} (URL: ${response.url})`;
                     console.warn(this.errorMessage);
                   } else if (response.status === "Scrolled down") {
-                    this.recognizedText = '';
+                    this.recognizedText = null;
                     console.log(`Content script confirmed scrollDown.`);
                   } else if (response.status === "Error") {
                     this.errorMessage = response.message || `Content script failed to scrollDown.`;
@@ -248,7 +248,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
                     this.errorMessage = `${response.error} (URL: ${response.url})`;
                     console.warn(this.errorMessage);
                   } else if (response.status === "Scrolled up") {
-                    this.recognizedText = '';
+                    this.recognizedText = null;
                     console.log(`Content script confirmed scrollUp.`);
                   } else if (response.status === "Error") {
                     this.errorMessage = response.message || `Content script failed to scrollUp.`;
@@ -275,13 +275,16 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
                       this.errorMessage = `${response.error} (URL: ${response.url})`;
                       console.warn(this.errorMessage);
                     } else if (response.status === "Clicked") {
-                      this.recognizedText = ''
+                      this.recognizedNumber = null;
+                      this.recognizedText = null;
                       console.log(`Content script confirmed click for number ${this.recognizedNumber}.`);
                     } else if (response.status === "Error") {
                       this.errorMessage = response.message || `Content script failed to click element ${this.recognizedNumber}.`;
                       console.warn(`Error from content script clicking element ${this.recognizedNumber}: ${this.errorMessage}`);
                     } else {
-                      console.warn(`Unexpected or no status in response from content script for clickElement ${this.recognizedNumber}:`, response);
+                      this.recognizedNumber = null;
+                      this.recognizedText = null;
+                      console.log(`Unexpected or no status in response from content script for clickElement ${this.recognizedNumber}:`, response);
                     }
                   } else {
                     console.warn(`No response received from content script for clickElement action on number ${this.recognizedNumber}. Ensure content script is active and responsive.`);
@@ -311,7 +314,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   startRecognition(): void {
     if (!this.isBrowserSupported || this.isListening) return;
     this.errorMessage = '';
-    this.recognizedText = '';
+    this.recognizedText = null;
     this.recognizedNumber = null;
     this.speechToTextService.startListening(this.selectedLanguage);
   }
@@ -337,14 +340,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   onLanguageChange(newLanguageCode: string): void {
     this.selectedLanguage = newLanguageCode;
 
-    console.log(`Lingua selezionata (ngModelChange), nuovo valore: ${newLanguageCode}`);
-    console.log(`this.selectedLanguage è ora (dopo assegnazione esplicita): ${this.selectedLanguage}`);
-
     if (this.isListening) {
       this.stopRecognition();
     }
     this.recognizedNumber = null;
-    this.recognizedText = '';
+    this.recognizedText = null;
     this.errorMessage = '';
   }
 
@@ -359,9 +359,6 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   toggleContentScriptNumbering(): void {
     this.isContentScriptNumberingActive = !this.isContentScriptNumberingActive;
     if (this.isContentScriptNumberingActive) {
-      this.sendMessageToActiveTab({ action: "numberClickables" }, (response) => {
-        if (response) console.log('Numbering response:', response);
-      });
       if (this.contentScriptNumberingIntervalId !== null) {
         window.clearInterval(this.contentScriptNumberingIntervalId);
       }
@@ -381,9 +378,10 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
         window.clearInterval(this.contentScriptNumberingIntervalId);
         this.contentScriptNumberingIntervalId = null;
       }
-      this.sendMessageToActiveTab({ action: "clearNumbers" }, (response) => {
-        if (response) console.log('Clear numbers response:', response);
-      });
+      //Never
+      //this.sendMessageToActiveTab({ action: "clearNumbers" }, (response) => {
+      //  if (response) console.log('Clear numbers response:', response);
+      //});
       if (this.isListening) {
         this.stopRecognition();
       }
