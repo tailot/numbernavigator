@@ -6,7 +6,7 @@
  * and communicates with the content script to interact with web pages (e.g., click elements, scroll).
  * It also manages UI elements like language selection, start/stop buttons, and status messages.
  */
-import { Component, OnInit, OnDestroy, NgZone, HostListener } from '@angular/core';
+import { Component, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { SpeechToTextService } from '../services/speech-to-text.service';
 import { numberWordMaps } from './number-words';
 import { Subscription } from 'rxjs';
@@ -128,18 +128,19 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   /**
    * @constructor
    * @param {SpeechToTextService} speechToTextService - Service for speech-to-text conversion.
-   * @param {NgZone} ngZone - Angular NgZone for running callbacks within Angular's change detection scope.
+   * @param {ChangeDetectorRef} cdr - Angular ChangeDetectorRef for manual change detection.
    * @description Initializes the component, checks for browser support for speech recognition,
    * and sets an error message if not supported.
    */
   constructor(
     private speechToTextService: SpeechToTextService,
-    private ngZone: NgZone
+    private cdr: ChangeDetectorRef
   ) {
     console.log('SpeechToNumberComponent CONSTRUCTOR');
     this.isBrowserSupported = this.speechToTextService.isBrowserSupported();
     if (!this.isBrowserSupported) {
       this.errorMessage = 'Il riconoscimento vocale non è supportato dal tuo browser.';
+      // No need for cdr.markForCheck() here as it's in constructor and view isn't initialized yet.
     }
   }
 
@@ -153,6 +154,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   onNetworkOnline(): void {
     this.isOnline = true;
     console.log('Connection is back online.');
+    this.cdr.markForCheck();
   }
 
   /**
@@ -165,6 +167,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   onNetworkOffline(): void {
     this.isOnline = false;
     console.log('Connection lost. Offline mode.');
+    this.cdr.markForCheck();
   }
 
   /**
@@ -181,126 +184,133 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.speechSubscription = this.speechToTextService
       .getSpeechObservable()
       .subscribe((text) => {
-        this.ngZone.run(() => {
-          this.recognizedText = text;
-          this.parseSpeechToNumber(text); // This will set recognizedNumber and potentially errorMessage
-          // If recognizedNumber is null, parseSpeechToNumber should have set an errorMessage.
-          if (this.recognizedNumber !== null) {
-            console.log(`Number parsed: ${this.recognizedNumber}. Requesting service to conclude and restart to process command.`);
-            this.speechToTextService.concludeAndRestartCurrentUtterance();
-          } else {
-            console.log(`Speech recognized: "${text}", but no valid number parsed. Error: "${this.errorMessage}"`);
-          }
-        });
+        this.recognizedText = text;
+        this.parseSpeechToNumber(text); // This will set recognizedNumber and potentially errorMessage
+        // If recognizedNumber is null, parseSpeechToNumber should have set an errorMessage.
+        if (this.recognizedNumber !== null) {
+          console.log(`Number parsed: ${this.recognizedNumber}. Requesting service to conclude and restart to process command.`);
+          this.speechToTextService.concludeAndRestartCurrentUtterance();
+        } else {
+          console.log(`Speech recognized: "${text}", but no valid number parsed. Error: "${this.errorMessage}"`);
+        }
+        this.cdr.markForCheck();
       });
 
     this.errorSubscription = this.speechToTextService
       .getErrorObservable()
       .subscribe((error) => {
-        this.ngZone.run(() => {
-          this.errorMessage = error;
-        });
+        this.errorMessage = error;
+        this.cdr.markForCheck();
       });
 
     this.listeningStateSubscription = this.speechToTextService
       .getListeningStateObservable()
       .subscribe((listening) => {
-        this.ngZone.run(() => {
-          const previousListeningState = this.isListening;
-          this.isListening = listening;
+        const previousListeningState = this.isListening;
+        this.isListening = listening;
 
-          if (previousListeningState && !this.isListening) {
-            console.log(`Listening has stopped. Recognized text: "${this.recognizedText}", Number: ${this.recognizedNumber}, Error: "${this.errorMessage}"`);
+        if (previousListeningState && !this.isListening) {
+          console.log(`Listening has stopped. Recognized text: "${this.recognizedText}", Number: ${this.recognizedNumber}, Error: "${this.errorMessage}"`);
 
-            if (this.recognizedNumber === 0) {
-              console.log(`Recognized number 0. Sending scrollDown command.`);
-              this.sendMessageToActiveTab({ action: "scrollDown" }, (response) => {
+          if (this.recognizedNumber === 0) {
+            console.log(`Recognized number 0. Sending scrollDown command.`);
+            this.sendMessageToActiveTab({ action: "scrollDown" }, (response) => {
+              if (response) {
+                if (response.sendMessageError) {
+                  this.errorMessage = `System error sending scrollDown: ${response.sendMessageError}`;
+                  console.warn(this.errorMessage);
+                } else if (response.error && response.url) {
+                  this.errorMessage = `${response.error} (URL: ${response.url})`;
+                  console.warn(this.errorMessage);
+                } else if (response.status === "Scrolled down") {
+                  this.recognizedText = null;
+                  console.log(`Content script confirmed scrollDown.`);
+                } else if (response.status === "Error") {
+                  this.errorMessage = response.message || `Content script failed to scrollDown.`;
+                  console.warn(`Error from content script for scrollDown: ${this.errorMessage}`, response);
+                } else {
+                  console.warn(`Unexpected response from content script for scrollDown:`, response);
+                  this.errorMessage = 'Unexpected response from page for scrollDown.';
+                }
+              } else {
+                console.warn(`No response received from content script for scrollDown action.`);
+                this.errorMessage = 'No response from page for scrollDown. Ensure content script is active.';
+              }
+              this.cdr.markForCheck();
+            });
+          } else if (this.recognizedNumber === 1) {
+            console.log(`Recognized number 1. Sending scrollUp command.`);
+            this.sendMessageToActiveTab({ action: "scrollUp" }, (response) => {
+               if (response) {
+                if (response.sendMessageError) {
+                  this.errorMessage = `System error sending scrollUp: ${response.sendMessageError}`;
+                  console.warn(this.errorMessage);
+                } else if (response.error && response.url) {
+                  this.errorMessage = `${response.error} (URL: ${response.url})`;
+                  console.warn(this.errorMessage);
+                } else if (response.status === "Scrolled up") {
+                  this.recognizedText = null;
+                  console.log(`Content script confirmed scrollUp.`);
+                } else if (response.status === "Error") {
+                  this.errorMessage = response.message || `Content script failed to scrollUp.`;
+                  console.warn(`Error from content script for scrollUp: ${this.errorMessage}`, response);
+                } else {
+                  console.warn(`Unexpected response from content script for scrollUp:`, response);
+                  this.errorMessage = 'Unexpected response from page for scrollUp.';
+                }
+              } else {
+                console.warn(`No response received from content script for scrollUp action.`);
+                this.errorMessage = 'No response from page for scrollUp. Ensure content script is active.';
+              }
+              this.cdr.markForCheck();
+            });
+          } else if (this.recognizedText && this.recognizedNumber !== null) { // Existing logic for other numbers (2-50)
+            console.log(`Attempting to click element number: ${this.recognizedNumber} from speech: "${this.recognizedText}"`);
+            this.sendMessageToActiveTab(
+              { action: "clickElement", number: this.recognizedNumber },
+              (response) => {
                 if (response) {
                   if (response.sendMessageError) {
-                    this.errorMessage = `System error sending scrollDown: ${response.sendMessageError}`;
+                    this.errorMessage = `System error sending command: ${response.sendMessageError}`;
                     console.warn(this.errorMessage);
                   } else if (response.error && response.url) {
                     this.errorMessage = `${response.error} (URL: ${response.url})`;
                     console.warn(this.errorMessage);
-                  } else if (response.status === "Scrolled down") {
+                  } else if (response.status === "Clicked") {
+                    this.recognizedNumber = null;
                     this.recognizedText = null;
-                    console.log(`Content script confirmed scrollDown.`);
+                    console.log(`Content script confirmed click for number ${this.recognizedNumber}.`);
                   } else if (response.status === "Error") {
-                    this.errorMessage = response.message || `Content script failed to scrollDown.`;
-                    console.warn(`Error from content script for scrollDown: ${this.errorMessage}`, response);
+                    this.errorMessage = response.message || `Content script failed to click element ${this.recognizedNumber}.`;
+                    console.warn(`Error from content script clicking element ${this.recognizedNumber}: ${this.errorMessage}`);
                   } else {
-                    console.warn(`Unexpected response from content script for scrollDown:`, response);
-                    this.errorMessage = 'Unexpected response from page for scrollDown.';
+                    this.recognizedNumber = null;
+                    this.recognizedText = null;
+                    console.log(`Unexpected or no status in response from content script for clickElement ${this.recognizedNumber}:`, response);
                   }
                 } else {
-                  console.warn(`No response received from content script for scrollDown action.`);
-                  this.errorMessage = 'No response from page for scrollDown. Ensure content script is active.';
+                  console.warn(`No response received from content script for clickElement action on number ${this.recognizedNumber}. Ensure content script is active and responsive.`);
+                  // It's important to also set this.errorMessage if this path is taken and it implies an error for the user.
+                  this.errorMessage = `No response clicking element ${this.recognizedNumber}.`;
                 }
-              });
-            } else if (this.recognizedNumber === 1) {
-              console.log(`Recognized number 1. Sending scrollUp command.`);
-              this.sendMessageToActiveTab({ action: "scrollUp" }, (response) => {
-                 if (response) {
-                  if (response.sendMessageError) {
-                    this.errorMessage = `System error sending scrollUp: ${response.sendMessageError}`;
-                    console.warn(this.errorMessage);
-                  } else if (response.error && response.url) {
-                    this.errorMessage = `${response.error} (URL: ${response.url})`;
-                    console.warn(this.errorMessage);
-                  } else if (response.status === "Scrolled up") {
-                    this.recognizedText = null;
-                    console.log(`Content script confirmed scrollUp.`);
-                  } else if (response.status === "Error") {
-                    this.errorMessage = response.message || `Content script failed to scrollUp.`;
-                    console.warn(`Error from content script for scrollUp: ${this.errorMessage}`, response);
-                  } else {
-                    console.warn(`Unexpected response from content script for scrollUp:`, response);
-                    this.errorMessage = 'Unexpected response from page for scrollUp.';
-                  }
-                } else {
-                  console.warn(`No response received from content script for scrollUp action.`);
-                  this.errorMessage = 'No response from page for scrollUp. Ensure content script is active.';
-                }
-              });
-            } else if (this.recognizedText && this.recognizedNumber !== null) { // Existing logic for other numbers (2-50)
-              console.log(`Attempting to click element number: ${this.recognizedNumber} from speech: "${this.recognizedText}"`);
-              this.sendMessageToActiveTab(
-                { action: "clickElement", number: this.recognizedNumber },
-                (response) => {
-                  if (response) {
-                    if (response.sendMessageError) {
-                      this.errorMessage = `System error sending command: ${response.sendMessageError}`;
-                      console.warn(this.errorMessage);
-                    } else if (response.error && response.url) {
-                      this.errorMessage = `${response.error} (URL: ${response.url})`;
-                      console.warn(this.errorMessage);
-                    } else if (response.status === "Clicked") {
-                      this.recognizedNumber = null;
-                      this.recognizedText = null;
-                      console.log(`Content script confirmed click for number ${this.recognizedNumber}.`);
-                    } else if (response.status === "Error") {
-                      this.errorMessage = response.message || `Content script failed to click element ${this.recognizedNumber}.`;
-                      console.warn(`Error from content script clicking element ${this.recognizedNumber}: ${this.errorMessage}`);
-                    } else {
-                      this.recognizedNumber = null;
-                      this.recognizedText = null;
-                      console.log(`Unexpected or no status in response from content script for clickElement ${this.recognizedNumber}:`, response);
-                    }
-                  } else {
-                    console.warn(`No response received from content script for clickElement action on number ${this.recognizedNumber}. Ensure content script is active and responsive.`);
-                  }
-                }
-              );
-            } else if (this.recognizedText && this.recognizedNumber === null) { // Parsing failed
-              console.log(`Listening stopped. Recognized text: "${this.recognizedText}", but no valid number was parsed. Current error: "${this.errorMessage}".`);
-            } else if (!this.recognizedText && !this.errorMessage) {
-              console.log(`Listening stopped. No text was recognized. Error: "${this.errorMessage}"`);
-            }
-          } else if (!previousListeningState && this.isListening) {
-            console.log('Listening has (re)started.');
-            // Qui potresti voler resettare recognizedText/Number se ogni sessione di ascolto deve essere pulita
+                this.cdr.markForCheck();
+              }
+            );
+          } else if (this.recognizedText && this.recognizedNumber === null) { // Parsing failed
+            console.log(`Listening stopped. Recognized text: "${this.recognizedText}", but no valid number was parsed. Current error: "${this.errorMessage}".`);
+            // No specific state change for the view here other than what parseSpeechToNumber might have set for errorMessage
+          } else if (!this.recognizedText && !this.errorMessage) {
+            console.log(`Listening stopped. No text was recognized. Error: "${this.errorMessage}"`);
+            // No specific state change for the view here
           }
-        });
+        } else if (!previousListeningState && this.isListening) {
+          console.log('Listening has (re)started.');
+          // Resetting state here might be needed and would require markForCheck if properties are changed.
+          // this.recognizedText = null;
+          // this.recognizedNumber = null;
+          // this.errorMessage = '';
+        }
+        this.cdr.markForCheck();
       });
   }
 

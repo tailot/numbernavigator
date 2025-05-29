@@ -3,7 +3,7 @@
  * @description This file contains the application configuration for the Angular application.
  * It sets up the necessary providers and configurations for the application to run.
  */
-import { ApplicationConfig, provideZoneChangeDetection } from '@angular/core';
+import { ApplicationConfig, provideZonelessChangeDetection, provideExperimentalCheckNoChangesForDebug } from '@angular/core';
 import { provideRouter } from '@angular/router';
 
 /**
@@ -16,5 +16,9 @@ import { provideRouter } from '@angular/router';
  *    - `provideZoneChangeDetection({ eventCoalescing: true })`: Configures Zone.js change detection with event coalescing.
  */
 export const appConfig: ApplicationConfig = {
-  providers: [provideZoneChangeDetection({ eventCoalescing: true })]
+  providers: [
+    provideZonelessChangeDetection(),
+    provideExperimentalCheckNoChangesForDebug()
+    // provideRouter() // This was not in the original providers array, so not adding it back unless explicitly told to.
+  ]
 };

@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { provideZonelessChangeDetection } from '@angular/core';
 
 import { SpeechToNumberComponent } from './speech-to-number.component';
 
@@ -8,7 +9,8 @@ describe('SpeechToNumberComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [SpeechToNumberComponent]
+      imports: [SpeechToNumberComponent],
+      providers: [provideZonelessChangeDetection()]
     })
     .compileComponents();
 
