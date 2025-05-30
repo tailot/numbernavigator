@@ -9,7 +9,7 @@
 import { Component, OnInit, OnDestroy, HostListener, ChangeDetectorRef } from '@angular/core';
 import { SpeechToTextService } from '../services/speech-to-text.service';
 import { numberWordMaps } from './number-words';
-import { Subscription } from 'rxjs';
+import { Subscription, interval } from 'rxjs';
 import { FormsModule } from '@angular/forms';
 
 /**
@@ -95,11 +95,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   isContentScriptNumberingActive: boolean = false;
   /**
    * @private
-   * @property {number | null} contentScriptNumberingIntervalId - Stores the ID of the interval timer used for periodic re-numbering by the content script.
-   * Null when numbering is inactive.
-   * @default null
+   * @property {Subscription | undefined} numberingIntervalSubscription - Stores the RxJS subscription for the periodic numbering interval.
+   * Undefined when numbering is inactive.
+   * @default undefined
    */
-  private contentScriptNumberingIntervalId: number | null = null;
+  private numberingIntervalSubscription?: Subscription;
 
   /**
    * @private
@@ -185,8 +185,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       .getSpeechObservable()
       .subscribe((text) => {
         this.recognizedText = text;
-        this.parseSpeechToNumber(text); // This will set recognizedNumber and potentially errorMessage
-        // If recognizedNumber is null, parseSpeechToNumber should have set an errorMessage.
+        this.parseSpeechToNumber(text);
         if (this.recognizedNumber !== null) {
           console.log(`Number parsed: ${this.recognizedNumber}. Requesting service to conclude and restart to process command.`);
           this.speechToTextService.concludeAndRestartCurrentUtterance();
@@ -368,34 +367,32 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
    */
   toggleContentScriptNumbering(): void {
     this.isContentScriptNumberingActive = !this.isContentScriptNumberingActive;
+
     if (this.isContentScriptNumberingActive) {
-      if (this.contentScriptNumberingIntervalId !== null) {
-        window.clearInterval(this.contentScriptNumberingIntervalId);
-      }
+      this.numberingIntervalSubscription?.unsubscribe();
+
       if (!this.isListening) {
         this.startRecognition();
       }
-      this.contentScriptNumberingIntervalId = window.setInterval(() => {
-        if (this.isContentScriptNumberingActive) { 
-          this.sendMessageToActiveTab({ action: "numberClickables" }, (response) => {
-            //if (response) console.log('Periodic numbering response:', response);
-          });
-        }
-      }, 5000);
-      console.log('Content script numbering activated.');
+
+      this.sendMessageToActiveTab({ action: "numberClickables" }, (response) => {
+        // console.log('Initial numbering response:', response);
+      });
+
+      this.numberingIntervalSubscription = interval(5000).subscribe(() => {
+        this.sendMessageToActiveTab({ action: "numberClickables" }, (response) => {
+          // console.log('Periodic numbering response:', response);
+        });
+      });
+      console.log('Content script numbering activated, periodic updates started.');
     } else {
-      if (this.contentScriptNumberingIntervalId !== null) {
-        window.clearInterval(this.contentScriptNumberingIntervalId);
-        this.contentScriptNumberingIntervalId = null;
-      }
-      //Never
-      //this.sendMessageToActiveTab({ action: "clearNumbers" }, (response) => {
-      //  if (response) console.log('Clear numbers response:', response);
-      //});
+      this.numberingIntervalSubscription?.unsubscribe();
+      this.numberingIntervalSubscription = undefined;
+
       if (this.isListening) {
         this.stopRecognition();
       }
-      console.log('Content script numbering deactivated.');
+      console.log('Content script numbering deactivated, periodic updates stopped.');
     }
   }
 
@@ -509,13 +506,12 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.speechSubscription?.unsubscribe();
     this.errorSubscription?.unsubscribe();
     this.listeningStateSubscription?.unsubscribe();
+    this.numberingIntervalSubscription?.unsubscribe();
+
     if (this.isListening) {
       this.speechToTextService.stopListening();
     }
-    if (this.contentScriptNumberingIntervalId !== null) {
-      window.clearInterval(this.contentScriptNumberingIntervalId);
-      this.contentScriptNumberingIntervalId = null;
-    }
+
     if (this.isContentScriptNumberingActive) { 
       this.sendMessageToActiveTab({ action: "clearNumbers" });
     }

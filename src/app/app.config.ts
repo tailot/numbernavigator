@@ -3,22 +3,21 @@
  * @description This file contains the application configuration for the Angular application.
  * It sets up the necessary providers and configurations for the application to run.
  */
-import { ApplicationConfig, provideZonelessChangeDetection, provideExperimentalCheckNoChangesForDebug } from '@angular/core';
-import { provideRouter } from '@angular/router';
+import { ApplicationConfig, provideZonelessChangeDetection } from '@angular/core';
 
 /**
  * @constant appConfig
  * @type {ApplicationConfig}
  * @description The main application configuration object.
- * This object is used to configure the Angular application, including providers for routing and change detection.
+ * This object is used to configure the Angular application, including providers for routing and zoneless change detection.
  *
  * @property {Array<any>} providers - An array of providers for the application.
- *    - `provideZoneChangeDetection({ eventCoalescing: true })`: Configures Zone.js change detection with event coalescing.
+ *    - `provideRouter(routes)`: Configures the application routes.
+ *    - `provideZonelessChangeDetection()`: Configures zoneless change detection.
  */
 export const appConfig: ApplicationConfig = {
   providers: [
-    provideZonelessChangeDetection(),
-    provideExperimentalCheckNoChangesForDebug()
-    // provideRouter() // This was not in the original providers array, so not adding it back unless explicitly told to.
+    provideZonelessChangeDetection()
+    // provideExperimentalCheckNoChangesForDebug has been removed as it is no longer exported by @angular/core.
   ]
 };
