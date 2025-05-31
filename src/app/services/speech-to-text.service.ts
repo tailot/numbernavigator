@@ -133,7 +133,7 @@ export class SpeechToTextService {
               errorMessage = "A network error occurred. Check your connection.";
               break;
             default:
-              errorMessage = `Errore: ${event.error}`;
+              errorMessage = `Speech recognition error code: ${event.error}`; // NEW
           }
           console.log('Speech recognition error:', event.error, errorMessage);
         }

@@ -117,6 +117,54 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
    */
   private listeningStateSubscription!: Subscription;
 
+  private errorMessages: { [langCode: string]: { [errorKey: string]: string } } = {
+    'en': {
+      'unsupportedBrowser': 'Speech recognition is not supported by your browser.',
+      'mapNotFound': 'Number map not found for language: {langCode}',
+      'parseError': 'Could not recognize a number (0-200) from: "{speech}"',
+      'noMicrophone': 'Could not capture audio. Ensure the microphone is enabled and permission is granted.',
+      'micAccessDenied': 'Microphone access denied. Please allow access in your browser settings.',
+      'networkError': 'A network error occurred with speech recognition. Check your connection.',
+      'noSpeechDetected': 'No speech detected. Please try again.',
+      'genericRecognitionError': 'Speech recognition error: {errorDetails}',
+      'contentScriptError': 'Page error on {url}: {error}',
+      'sendMessageError': 'System error sending command: {error}',
+      'noResponseFromPage': 'No response from page for {action}. Ensure content script is active and page is supported.',
+      'unexpectedResponse': 'Unexpected response from page for {action}.',
+      'cannotSendToNonWebsite': 'Commands cannot be sent to this type of page (e.g., browser settings, file pages).'
+    },
+    'it': {
+      'unsupportedBrowser': 'Il riconoscimento vocale non è supportato dal tuo browser.',
+      'mapNotFound': 'Mappa numerica non trovata per la lingua: {langCode}',
+      'parseError': 'Impossibile riconoscere un numero (0-200) da: "{speech}"',
+      'noMicrophone': 'Impossibile catturare audio. Assicurati che il microfono sia abilitato e il permesso concesso.',
+      'micAccessDenied': 'Accesso al microfono negato. Per favore, consenti l\'accesso nelle impostazioni del browser.',
+      'networkError': 'Si è verificato un errore di rete con il riconoscimento vocale. Controlla la tua connessione.',
+      'noSpeechDetected': 'Nessun discorso rilevato. Per favore, riprova.',
+      'genericRecognitionError': 'Errore di riconoscimento vocale: {errorDetails}',
+      'contentScriptError': 'Errore dalla pagina {url}: {error}',
+      'sendMessageError': 'Errore di sistema durante l\'invio del comando: {error}',
+      'noResponseFromPage': 'Nessuna risposta dalla pagina per {action}. Assicurati che lo script sia attivo e la pagina supportata.',
+      'unexpectedResponse': 'Risposta inattesa dalla pagina per {action}.',
+      'cannotSendToNonWebsite': 'Non è possibile inviare comandi a questo tipo di pagina (es. impostazioni browser, file locali).'
+    },
+    'es': {
+      'unsupportedBrowser': 'El reconocimiento de voz no es compatible con tu navegador.',
+      'mapNotFound': 'No se encontró el mapa numérico para el idioma: {langCode}',
+      'parseError': 'No se pudo reconocer un número (0-200) de: "{speech}"',
+      'noMicrophone': 'No se pudo capturar el audio. Asegúrate de que el micrófono esté habilitado y con permisos.',
+      'micAccessDenied': 'Acceso al micrófono denegado. Por favor, permite el acceso en la configuración de tu navegador.',
+      'networkError': 'Ocurrió un error de red con el reconocimiento de voz. Verifica tu conexión.',
+      'noSpeechDetected': 'No se detectó voz. Por favor, inténtalo de nuevo.',
+      'genericRecognitionError': 'Error de reconocimiento de voz: {errorDetails}',
+      'contentScriptError': 'Error de página en {url}: {error}',
+      'sendMessageError': 'Error del sistema al enviar el comando: {error}',
+      'noResponseFromPage': 'No hubo respuesta de la página para {action}. Asegúrate de que el script de contenido esté activo y la página sea compatible.',
+      'unexpectedResponse': 'Respuesta inesperada de la página para {action}.',
+      'cannotSendToNonWebsite': 'No se pueden enviar comandos a este tipo de página (ej. configuración del navegador, archivos locales).'
+    }
+  };
+
   /**
    * @private
    * @readonly
@@ -139,7 +187,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     console.log('SpeechToNumberComponent CONSTRUCTOR');
     this.isBrowserSupported = this.speechToTextService.isBrowserSupported();
     if (!this.isBrowserSupported) {
-      this.errorMessage = 'Il riconoscimento vocale non è supportato dal tuo browser.';
+      this.errorMessage = this.getErrorMessage('unsupportedBrowser');
       // No need for cdr.markForCheck() here as it's in constructor and view isn't initialized yet.
     }
   }
@@ -155,6 +203,27 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.isOnline = true;
     console.log('Connection is back online.');
     this.cdr.markForCheck();
+  }
+
+  private getErrorMessage(key: string, replacements?: { [placeholder: string]: string }): string {
+    const langCode = this.selectedLanguage.split('-')[0];
+    let message = this.errorMessages[langCode]?.[key] || this.errorMessages['en']?.[key];
+
+    if (!message) {
+      const unknownErrorFallback = (this.errorMessages['en'] && this.errorMessages['en']['genericRecognitionError'] ? this.errorMessages['en']['genericRecognitionError'] : 'An unknown error occurred. Error key: {key} Details: {errorDetails}')
+        .replace('{key}', key)
+        .replace('{errorDetails}', 'Unknown key');
+      return unknownErrorFallback;
+    }
+
+    if (replacements) {
+      for (const placeholder in replacements) {
+        if (Object.prototype.hasOwnProperty.call(replacements, placeholder)) {
+          message = message.replace(new RegExp(`{${placeholder}}`, 'g'), replacements[placeholder]);
+        }
+      }
+    }
+    return message;
   }
 
   /**
@@ -197,8 +266,24 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
     this.errorSubscription = this.speechToTextService
       .getErrorObservable()
-      .subscribe((error) => {
-        this.errorMessage = error;
+      .subscribe((errorText) => { // Renamed 'error' to 'errorText'
+        let errorKey = 'genericRecognitionError';
+        let replacements = { errorDetails: errorText };
+
+        if (errorText.includes('No speech detected')) {
+          errorKey = 'noSpeechDetected';
+          replacements = {};
+        } else if (errorText.includes('Could not capture audio') || errorText.includes('audio-capture')) {
+          errorKey = 'noMicrophone';
+          replacements = {};
+        } else if (errorText.includes('Microphone access denied') || errorText.includes('not-allowed')) {
+          errorKey = 'micAccessDenied';
+          replacements = {};
+        } else if (errorText.includes('network error occurred') || errorText.includes('network')) {
+          errorKey = 'networkError';
+          replacements = {};
+        }
+        this.errorMessage = this.getErrorMessage(errorKey, replacements);
         this.cdr.markForCheck();
       });
 
@@ -216,81 +301,87 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
             this.sendMessageToActiveTab({ action: "scrollDown" }, (response) => {
               if (response) {
                 if (response.sendMessageError) {
-                  this.errorMessage = `System error sending scrollDown: ${response.sendMessageError}`;
-                  console.warn(this.errorMessage);
+                  this.errorMessage = this.getErrorMessage('sendMessageError', { error: response.sendMessageError });
+                } else if (response.errorKey === "cannotSendToNonWebsite") {
+                  this.errorMessage = this.getErrorMessage('cannotSendToNonWebsite');
+                  if (response.originatingUrl) { // Check if originatingUrl is provided
+                    console.warn(`Attempted scrollDown on non-website tab: ${response.originatingUrl}`);
+                  }
                 } else if (response.error && response.url) {
-                  this.errorMessage = `${response.error} (URL: ${response.url})`;
-                  console.warn(this.errorMessage);
+                  this.errorMessage = this.getErrorMessage('contentScriptError', { error: response.error, url: response.url });
                 } else if (response.status === "Scrolled down") {
                   this.recognizedText = null;
                   console.log(`Content script confirmed scrollDown.`);
-                } else if (response.status === "Error") {
-                  this.errorMessage = response.message || `Content script failed to scrollDown.`;
-                  console.warn(`Error from content script for scrollDown: ${this.errorMessage}`, response);
+                } else if (response.status === "Error" && response.message) {
+                  this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: 'scrollDown' }); // Or a more specific key + response.message
+                  console.warn(`Error from content script for scrollDown: ${response.message}`, response);
                 } else {
-                  console.warn(`Unexpected response from content script for scrollDown:`, response);
-                  this.errorMessage = 'Unexpected response from page for scrollDown.';
+                  this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: 'scrollDown' });
                 }
               } else {
-                console.warn(`No response received from content script for scrollDown action.`);
-                this.errorMessage = 'No response from page for scrollDown. Ensure content script is active.';
+                this.errorMessage = this.getErrorMessage('noResponseFromPage', { action: 'scrollDown' });
               }
               this.cdr.markForCheck();
             });
           } else if (this.recognizedNumber === 1) {
             console.log(`Recognized number 1. Sending scrollUp command.`);
             this.sendMessageToActiveTab({ action: "scrollUp" }, (response) => {
-               if (response) {
+              if (response) {
                 if (response.sendMessageError) {
-                  this.errorMessage = `System error sending scrollUp: ${response.sendMessageError}`;
-                  console.warn(this.errorMessage);
+                  this.errorMessage = this.getErrorMessage('sendMessageError', { error: response.sendMessageError });
+                } else if (response.errorKey === "cannotSendToNonWebsite") {
+                  this.errorMessage = this.getErrorMessage('cannotSendToNonWebsite');
+                  if (response.originatingUrl) { // Check if originatingUrl is provided
+                    console.warn(`Attempted scrollUp on non-website tab: ${response.originatingUrl}`);
+                  }
                 } else if (response.error && response.url) {
-                  this.errorMessage = `${response.error} (URL: ${response.url})`;
-                  console.warn(this.errorMessage);
+                  this.errorMessage = this.getErrorMessage('contentScriptError', { error: response.error, url: response.url });
                 } else if (response.status === "Scrolled up") {
                   this.recognizedText = null;
                   console.log(`Content script confirmed scrollUp.`);
-                } else if (response.status === "Error") {
-                  this.errorMessage = response.message || `Content script failed to scrollUp.`;
-                  console.warn(`Error from content script for scrollUp: ${this.errorMessage}`, response);
+                } else if (response.status === "Error" && response.message) {
+                  this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: 'scrollUp' }); // Or a more specific key + response.message
+                  console.warn(`Error from content script for scrollUp: ${response.message}`, response);
                 } else {
-                  console.warn(`Unexpected response from content script for scrollUp:`, response);
-                  this.errorMessage = 'Unexpected response from page for scrollUp.';
+                  this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: 'scrollUp' });
                 }
               } else {
-                console.warn(`No response received from content script for scrollUp action.`);
-                this.errorMessage = 'No response from page for scrollUp. Ensure content script is active.';
+                this.errorMessage = this.getErrorMessage('noResponseFromPage', { action: 'scrollUp' });
               }
               this.cdr.markForCheck();
             });
           } else if (this.recognizedText && this.recognizedNumber !== null) { // Existing logic for other numbers (2-50)
             console.log(`Attempting to click element number: ${this.recognizedNumber} from speech: "${this.recognizedText}"`);
+            const targetIndex = this.recognizedNumber; // Capture for use in callback
             this.sendMessageToActiveTab(
               { action: "clickElement", number: this.recognizedNumber },
               (response) => {
                 if (response) {
                   if (response.sendMessageError) {
-                    this.errorMessage = `System error sending command: ${response.sendMessageError}`;
-                    console.warn(this.errorMessage);
+                    this.errorMessage = this.getErrorMessage('sendMessageError', { error: response.sendMessageError });
+                  } else if (response.errorKey === "cannotSendToNonWebsite") {
+                    this.errorMessage = this.getErrorMessage('cannotSendToNonWebsite');
+                    if (response.originatingUrl) { // Check if originatingUrl is provided
+                      console.warn(`Attempted clickElement on non-website tab: ${response.originatingUrl}`);
+                    }
                   } else if (response.error && response.url) {
-                    this.errorMessage = `${response.error} (URL: ${response.url})`;
-                    console.warn(this.errorMessage);
-                  } else if (response.status === "Clicked") {
+                    this.errorMessage = this.getErrorMessage('contentScriptError', { error: response.error, url: response.url });
+                  } else if (response.status === "Clicked") { // Assuming "Clicked" is the success status
                     this.recognizedNumber = null;
                     this.recognizedText = null;
-                    console.log(`Content script confirmed click for number ${this.recognizedNumber}.`);
-                  } else if (response.status === "Error") {
-                    this.errorMessage = response.message || `Content script failed to click element ${this.recognizedNumber}.`;
-                    console.warn(`Error from content script clicking element ${this.recognizedNumber}: ${this.errorMessage}`);
+                    console.log(`Content script confirmed click for number ${targetIndex}.`);
+                  } else if (response.status === "Error" && response.message) {
+                    this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: `clickElement ${targetIndex}` });
+                    console.warn(`Error from content script clicking element ${targetIndex}: ${response.message}`);
                   } else {
-                    this.recognizedNumber = null;
-                    this.recognizedText = null;
-                    console.log(`Unexpected or no status in response from content script for clickElement ${this.recognizedNumber}:`, response);
+                    // this.recognizedNumber = null; // Keep them for debugging if action failed unexpectedly
+                    // this.recognizedText = null;
+                    this.errorMessage = this.getErrorMessage('unexpectedResponse', { action: `clickElement ${targetIndex}` });
+                    console.log(`Unexpected or no status in response from content script for clickElement ${targetIndex}:`, response);
                   }
                 } else {
-                  console.warn(`No response received from content script for clickElement action on number ${this.recognizedNumber}. Ensure content script is active and responsive.`);
-                  // It's important to also set this.errorMessage if this path is taken and it implies an error for the user.
-                  this.errorMessage = `No response clicking element ${this.recognizedNumber}.`;
+                  this.errorMessage = this.getErrorMessage('noResponseFromPage', { action: `clickElement ${targetIndex}` });
+                  console.warn(`No response received from content script for clickElement action on number ${targetIndex}.`);
                 }
                 this.cdr.markForCheck();
               }
@@ -412,20 +503,29 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
         if (tabs.length > 0 && tabs[0].id) {
           const activeTab = tabs[0];
           if (activeTab.url && (activeTab.url.startsWith('http://') || activeTab.url.startsWith('https://'))) {
-            console.log('Sending message to active web tab:', activeTab.url);
-            chrome.tabs.sendMessage(activeTab.id!, message, (response) => {
-              if (chrome.runtime.lastError) {
-                const errorMessageText = `Error sending message to content script: ${chrome.runtime.lastError.message}`;
-                console.warn(errorMessageText, 'Tab ID:', activeTab.id);
-                if (callback) callback({ sendMessageError: chrome.runtime.lastError.message });
-              } else if (callback) { 
-                callback(response); 
+            console.log('Sending message to active web tab:', activeTab.url, 'Message:', message); // Added message to log
+            try { // ADDED TRY
+              chrome.tabs.sendMessage(activeTab.id!, message, (response) => {
+                if (chrome.runtime.lastError) {
+                  const errorMessageText = `Error sending message to content script (tabId: ${activeTab.id}): ${chrome.runtime.lastError.message}`;
+                  console.warn(errorMessageText, 'Message:', message); // Added message to log
+                  if (callback) callback({ sendMessageError: chrome.runtime.lastError.message });
+                } else if (callback) {
+                  callback(response);
+                }
+              });
+            } catch (e: any) { // ADDED CATCH
+              const catchErrorMessage = `Synchronous error sending message (tabId: ${activeTab.id}): ${e.message}`;
+              console.error(catchErrorMessage, 'Message:', message, 'Error object:', e); // Added message and error object to log
+              if (callback) {
+                // Ensure a consistent error structure is sent back, similar to runtime.lastError
+                callback({ sendMessageError: `Synchronous error: ${e.message || 'Unknown error'}` });
               }
-            });
+            }
           } else {
             //console.log('Active tab is not a standard website. Message not sent. URL:', activeTab.url);
             if (callback) {
-              callback({ error: "Cannot send message to non-website tab", url: activeTab.url });
+              callback({ errorKey: "cannotSendToNonWebsite", originatingUrl: activeTab.url }); // MODIFIED LINE
             }
           }
         } else {
@@ -449,12 +549,13 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
    * @returns {void}
    */
   private parseSpeechToNumber(speech: string): void {
-    const currentLangCode = this.selectedLanguage.split('-')[0]; 
+    const currentLangCode = this.selectedLanguage.split('-')[0];
     const langMap = this.fullNumberWordMaps[currentLangCode];
 
     if (!langMap) {
-      this.errorMessage = `Mappa numerica non trovata per la lingua: ${currentLangCode}`;
+      this.errorMessage = this.getErrorMessage('mapNotFound', { langCode: currentLangCode });
       this.recognizedNumber = null;
+      this.cdr.markForCheck(); // Added to ensure UI updates if map not found
       return;
     }
 
@@ -477,8 +578,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     }
 
     const numericValue = parseInt(cleanedSpeech, 10);
-    // Allow 0 for scroll commands, and 1-50 for clickable elements.
-    // The numberWordMaps already define 0-50. This parseInt is a fallback.
+    // The system recognizes numbers from 0 to 200. Specific numbers have predefined actions:
+    // 0 for scroll down, 1 for scroll up. Other numbers (2-200) can be used for clicking numbered elements if displayed by the content script.
+    // This parseInt is a fallback for numeric strings not directly in numberWordMaps.
     if (!isNaN(numericValue) && numericValue >= 0 && numericValue <= 200) {
       // Check if this numeric string is explicitly defined in the map,
       // e.g. "0" or "1" is in map, "200" might not be.
@@ -491,8 +593,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     }
 
     // If we reach here, no number (0-200) was parsed.
-    this.errorMessage = `Impossibile riconoscere un numero (0-200) da: "${speech}"`;
+    this.errorMessage = this.getErrorMessage('parseError', { speech: speech });
     this.recognizedNumber = null;
+    this.cdr.markForCheck(); // Added to ensure UI updates if parsing fails
   }
 
   /**
