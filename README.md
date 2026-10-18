@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src/assets/icons/icon128.png" alt="NumberNavigator Logo" width="128">
+</p>
+
 # NumberNavigator
 
 NumberNavigator is a browser extension designed for hands-free navigation of web pages using voice commands. It allows users to interact with web elements and scroll pages by speaking numbers.
