@@ -22,9 +22,18 @@
     <div class="status" role="status" aria-live="polite">
       <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
       @if (!isActive()) { Stopped }
-      @else if (isListening()) { Listening… }
+      @else if (isListening()) { Listening… <span class="engine">({{ activeEngine() === 'local' ? 'on-device' : 'online' }})</span> }
       @else { Starting microphone… }
     </div>
+
+    <label class="language">
+      Engine
+      <select [value]="engine()" (change)="onEngineChange($any($event.target).value)">
+        <option value="auto" [selected]="engine() === 'auto'">Automatic (recommended)</option>
+        <option value="cloud" [selected]="engine() === 'cloud'">Online service</option>
+        <option value="local" [selected]="engine() === 'local'">On-device (Edge, offline)</option>
+      </select>
+    </label>
 
     <label class="language">
       Language
@@ -35,6 +44,13 @@
       </select>
     </label>
   </section>
+
+  @if (modelStatus()) {
+    <div class="box info" role="status">⬇️ {{ modelStatus() }}</div>
+  }
+  @if (notice()) {
+    <div class="box info" role="status">ℹ️ {{ notice() }}</div>
+  }
 
   @if (isActive()) {
     @if (!hasTargetTab()) {

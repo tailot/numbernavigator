@@ -5,7 +5,7 @@
  * (click / scroll) to the content script of the website the user is looking at.
  */
 import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
-import { SpeechToTextService } from '../services/speech-to-text.service';
+import { ActiveEngine, SpeechEngine, SpeechToTextService } from '../services/speech-to-text.service';
 import { parseSpokenNumber } from './parse-number';
 import { Subscription } from 'rxjs';
 
@@ -13,6 +13,7 @@ interface LanguageOption { name: string; code: string; }
 type Feedback = { kind: 'ok' | 'info' | 'error'; text: string };
 
 const LANGUAGE_STORAGE_KEY = 'numbernavigator.language';
+const ENGINE_STORAGE_KEY = 'numbernavigator.engine';
 const REFRESH_INTERVAL_MS = 3000;
 
 @Component({
@@ -40,6 +41,12 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   /** User intent: navigation started (numbers shown + microphone on). */
   readonly isActive = signal(false);
   readonly isListening = signal(false);
+  readonly engine = signal<SpeechEngine>(this.initialEngine());
+  readonly activeEngine = signal<ActiveEngine | null>(null);
+  /** Progress while the on-device model downloads. */
+  readonly modelStatus = signal<string | null>(null);
+  readonly notice = signal<string | null>(null);
+  readonly localApiAvailable = this.speech.isLocalApiAvailable();
   readonly lastHeard = signal<string | null>(null);
   readonly feedback = signal<Feedback | null>(null);
   readonly error = signal<string | null>(null);
@@ -60,6 +67,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.subs.add(this.speech.getErrorObservable().subscribe((message) => {
       this.error.set(message);
     }));
+    this.subs.add(this.speech.getStatusObservable().subscribe((s) => this.modelStatus.set(s)));
+    this.subs.add(this.speech.getNoticeObservable().subscribe((n) => this.notice.set(n)));
+    this.subs.add(this.speech.getActiveEngineObservable().subscribe((e) => this.activeEngine.set(e)));
     this.subs.add(this.speech.getListeningStateObservable().subscribe((listening) => {
       this.isListening.set(listening);
       // A fatal error (e.g. microphone denied) stops listening for good: reflect it in the UI.
@@ -99,7 +109,17 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     try { localStorage.setItem(LANGUAGE_STORAGE_KEY, code); } catch { /* storage unavailable */ }
     this.lastHeard.set(null);
     this.feedback.set(null);
-    this.speech.changeLanguage(code); // restarts by itself if listening
+    this.notice.set(null);
+    void this.speech.restart(code, this.engine()); // restarts by itself if listening
+  }
+
+  onEngineChange(value: string): void {
+    const engine = (['auto', 'cloud', 'local'].includes(value) ? value : 'auto') as SpeechEngine;
+    this.engine.set(engine);
+    try { localStorage.setItem(ENGINE_STORAGE_KEY, engine); } catch { /* storage unavailable */ }
+    this.notice.set(null);
+    this.error.set(null);
+    void this.speech.restart(this.selectedLanguage(), engine);
   }
 
   private start(): void {
@@ -108,7 +128,8 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.feedback.set(null);
     this.lastHeard.set(null);
     this.isActive.set(true);
-    this.speech.startListening(this.selectedLanguage());
+    this.notice.set(null);
+    void this.speech.startListening(this.selectedLanguage(), this.engine());
     void this.refreshActiveTab();
     this.refreshTimer = window.setInterval(() => void this.refreshActiveTab(), REFRESH_INTERVAL_MS);
   }
@@ -187,6 +208,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     } catch (e: any) {
       return { sendMessageError: e?.message ?? String(e) };
     }
+  }
+
+  private initialEngine(): SpeechEngine {
+    try {
+      const saved = localStorage.getItem(ENGINE_STORAGE_KEY);
+      if (saved === 'auto' || saved === 'cloud' || saved === 'local') return saved;
+    } catch { /* ignore */ }
+    return 'auto';
   }
 
   private initialLanguage(): string {
