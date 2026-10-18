@@ -53,7 +53,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   // ------------------------------------------------------------------ lifecycle
   ngOnInit(): void {
     if (!this.isBrowserSupported) {
-      this.error.set('Speech recognition is not supported by this browser. Use Chrome or another Chromium-based browser.');
+      this.error.set('Speech recognition is not supported by this browser. Use Google Chrome or Microsoft Edge.');
       return;
     }
     this.subs.add(this.speech.getSpeechObservable().subscribe((text) => this.onSpeech(text)));

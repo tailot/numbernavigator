@@ -14,7 +14,9 @@ NumberNavigator is a browser extension designed for hands-free navigation of web
 
 ## How to Use
 
-1.  **Install (Chrome/Chromium):** `chrome://extensions` -> enable *Developer mode* -> *Load unpacked* -> select `dist/numbernavigator/browser` (after building) or the unzipped release folder.
+1.  **Install** (same package for both browsers; unzip it first, or use `dist/numbernavigator/browser` after building):
+    *   **Google Chrome:** open `chrome://extensions` -> enable *Developer mode* -> *Load unpacked* -> select the folder.
+    *   **Microsoft Edge:** open `edge://extensions` -> enable *Developer mode* (left sidebar) -> *Load unpacked* -> select the folder.
 2.  Click the toolbar icon: the **control tab** opens. Press **Start** and allow the microphone.
 3.  Switch to the website you want to control. **Keep the control tab open** (it can stay in the background).
 4.  Say the yellow number next to what you want to click. Say **0** to scroll down, **1** to scroll up.
@@ -23,7 +25,9 @@ NumberNavigator is a browser extension designed for hands-free navigation of web
 **Notes**
 
 *   Speech recognition uses the browser's online service, so an internet connection is required.
-*   Works on `http`/`https` pages only (not `chrome://` pages, the Web Store or local files).
+*   Works on `http`/`https` pages only (not `chrome://` / `edge://` pages, the Chrome Web Store, Edge Add-ons or local files).
+*   Supported browsers: Google Chrome and Microsoft Edge (version 105 or later). Internet Explorer is not supported.
+*   On Edge/Windows, if the microphone starts but nothing is recognized, check *Settings -> Privacy -> Speech -> Online speech recognition*.
 *   Numbers 2-200 are assigned, in page order, to elements currently visible in the window.
 *   Numbers are never assigned to elements hidden behind other content (modals, sticky bars).
 
@@ -47,7 +51,7 @@ To build NumberNavigator from the source code, you'll need Node.js and npm (whic
     ```bash
     npm run build
     ```
-    This command compiles the Angular application, TypeScript content scripts, and background scripts.
+    This compiles the Angular app and, via `tsconfig.scripts.json`, the content and background scripts (works on Windows, macOS and Linux).
 
 4.  **Locate the built extension:**
     The production-ready build of the extension will be available in the `dist/numbernavigator/browser` directory.
