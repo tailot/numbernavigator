@@ -130,8 +130,11 @@ export class SpeechToTextService {
             fatal = true;
             break;
           case 'not-allowed':
-          case 'service-not-allowed':
             errorMessage = 'Microphone access denied. Allow the microphone for this extension (lock icon in the address bar) and press Start again.';
+            fatal = true;
+            break;
+          case 'service-not-allowed':
+            errorMessage = 'Speech recognition is blocked. Check the browser/system privacy settings for speech and the microphone (on Edge/Windows: "Online speech recognition"), then press Start again.';
             fatal = true;
             break;
           case 'network':

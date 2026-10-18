@@ -3,6 +3,7 @@
   "name": "Number Navigator",
   "version": "1.0.11",
   "description": "Navigate hands-free by speaking numbers.",
+  "minimum_chrome_version": "105",
   "permissions": [
     "activeTab",
     "scripting"

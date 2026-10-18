@@ -1,0 +1,12 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    "module": "commonjs",
+    "lib": ["ES2020", "DOM"],
+    "types": ["chrome"],
+    "outDir": "./dist/numbernavigator/browser",
+    "strict": true,
+    "skipLibCheck": true
+  },
+  "files": ["src/content.ts", "src/background.ts"]
+}
