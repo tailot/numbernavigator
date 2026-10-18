@@ -1,20 +1,20 @@
 <main>
   <header>
     <h1>Number Navigator</h1>
-    <p class="subtitle">Control any web page with your voice: say the number you see.</p>
+    <p class="subtitle">Control any web page with your voice or keyboard: say or type the number you see.</p>
   </header>
 
   @if (error()) {
     <div class="box error" role="alert">⚠️ {{ error() }}</div>
   }
-  @if (!isOnline()) {
+  @if (!isOnline() && voiceEnabled()) {
     <div class="box error" role="alert">No internet connection: speech recognition needs it.</div>
   }
 
   <section class="controls" aria-label="Controls">
     <button type="button" class="main-button" [class.stop]="isActive()"
             [attr.aria-pressed]="isActive()"
-            [disabled]="!isBrowserSupported || (!isActive() && !isOnline())"
+            [disabled]="!isActive() && !canStart()"
             (click)="toggle()">
       {{ isActive() ? '■ Stop' : '🎤 Start' }}
     </button>
@@ -22,28 +22,57 @@
     <div class="status" role="status" aria-live="polite">
       <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
       @if (!isActive()) { Stopped }
-      @else if (isListening()) { Listening… <span class="engine">({{ activeEngine() === 'local' ? 'on-device' : 'online' }})</span> }
-      @else { Starting microphone… }
+      @else if (voiceEnabled()) {
+        @if (isListening()) { Listening… <span class="engine">({{ activeEngine() === 'local' ? 'on-device' : 'online' }})</span> }
+        @else { Starting microphone… }
+      }
+      @else { Keyboard active }
     </div>
 
-    <label class="language">
-      Engine
-      <select [value]="engine()" (change)="onEngineChange($any($event.target).value)">
-        <option value="auto" [selected]="engine() === 'auto'">Automatic (recommended)</option>
-        <option value="cloud" [selected]="engine() === 'cloud'">Online service</option>
-        <option value="local" [selected]="engine() === 'local'">On-device (Edge, offline)</option>
-      </select>
-    </label>
+    @if (voiceEnabled()) {
+      <label class="language">
+        Engine
+        <select [value]="engine()" (change)="onEngineChange($any($event.target).value)">
+          <option value="auto" [selected]="engine() === 'auto'">Automatic (recommended)</option>
+          <option value="cloud" [selected]="engine() === 'cloud'">Online service</option>
+          <option value="local" [selected]="engine() === 'local'">On-device (Edge, offline)</option>
+        </select>
+      </label>
 
-    <label class="language">
-      Language
-      <select [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
-        @for (lang of languages; track lang.code) {
-          <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
-        }
-      </select>
-    </label>
+      <label class="language">
+        Language
+        <select [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
+          @for (lang of languages; track lang.code) {
+            <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
+          }
+        </select>
+      </label>
+    }
   </section>
+
+  <fieldset class="methods">
+    <legend>Navigation method</legend>
+    <label class="check">
+      <input type="checkbox" [checked]="voiceEnabled()" [disabled]="voiceEnabled() && !keyboardEnabled()" (change)="onVoiceToggle($any($event.target).checked)">
+      🎤 Voice
+    </label>
+    <label class="check">
+      <input type="checkbox" [checked]="keyboardEnabled()" [disabled]="keyboardEnabled() && !voiceEnabled()" (change)="onKeyboardToggle($any($event.target).checked)">
+      ⌨️ Keyboard (type the number on the page)
+    </label>
+    <p class="hint">Use one or both. At least one stays on: turn the other on first to switch.</p>
+    @if (keyboardEnabled()) {
+      <label class="language">
+        Wait after last digit
+        <select [value]="keyTimeoutMs()" (change)="onKeyTimeoutChange($any($event.target).value)">
+          @for (opt of keyTimeoutOptions; track opt.ms) {
+            <option [value]="opt.ms" [selected]="opt.ms === keyTimeoutMs()">{{ opt.label }}</option>
+          }
+        </select>
+      </label>
+      <p class="hint">Type 1 then 2 quickly for 12. Enter confirms, Backspace deletes, Esc cancels. When only one number can match, it runs immediately.</p>
+    }
+  </fieldset>
 
   @if (modelStatus()) {
     <div class="box info" role="status">⬇️ {{ modelStatus() }}</div>
@@ -65,7 +94,7 @@
   <section class="help">
     <h2>Commands</h2>
     <table>
-      <tr><th>Say</th><th>Effect</th></tr>
+      <tr><th>Say or type</th><th>Effect</th></tr>
       <tr><td>A number from <b>2</b> up</td><td>Clicks the element with that number (text fields get the cursor)</td></tr>
       <tr><td><b>0</b> (zero)</td><td>Scroll down</td></tr>
       <tr><td><b>1</b> (one)</td><td>Scroll up</td></tr>
@@ -73,7 +102,7 @@
     <ol>
       <li>Press <b>Start</b> and allow the microphone.</li>
       <li>Go to the website you want to use (keep this tab open in the background).</li>
-      <li>Say the yellow number next to what you want to click.</li>
+      <li>Say (or type, if the keyboard is on) the yellow number next to what you want to click.</li>
     </ol>
     <details>
       <summary>Good to know</summary>

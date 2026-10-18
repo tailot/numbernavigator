@@ -4,16 +4,19 @@
 
 # NumberNavigator
 
-NumberNavigator is a browser extension designed for hands-free navigation of web pages using voice commands. It allows users to interact with web elements and scroll pages by speaking numbers.
+NumberNavigator is a browser extension designed for hands-free and keyboard-driven navigation of web pages using numbers. It allows users to interact with web elements and scroll pages by speaking or typing numbers.
 
 ## Core Features
 
-*   **Voice-controlled clicking:** say the number shown next to any visible link, button, checkbox, menu, tab or field.
-*   **Text fields:** saying a field's number puts the cursor in it, ready to type or dictate.
-*   **Voice-controlled scrolling:** say "zero" to scroll down and "one" to scroll up (works on pages that scroll inside a container too).
+*   **Voice or Keyboard-controlled clicking:** say or type the number shown next to any visible link, button, checkbox, menu, tab or field.
+*   **Flexible Navigation Methods:** choose 🎤 Voice, ⌨️ Keyboard, or both. Settings remember your selection and ensure at least one method remains active.
+*   **Keyboard Timeout & Matching:** typed digits accumulate in a buffer (e.g. `1` then `2` within the timeout gives `12`). Confirm immediately with `Enter`, edit with `Backspace`, or cancel/blur text fields with `Esc`. Unambiguous numbers run immediately without waiting for timeout.
+*   **Offline Mode:** keyboard navigation works completely offline without requiring microphone access or an internet connection.
+*   **Text fields:** saying or typing a field's number puts the cursor in it, ready to type or dictate. Digits are ignored while typing inside form inputs.
+*   **Controlled scrolling:** say or type "0" to scroll down and "1" to scroll up (works on pages that scroll inside a container too).
 *   **Stable numbers:** an element keeps its number while it is on screen; numbers refresh automatically after scrolling, resizing or page changes.
-*   **Clear feedback:** a toast on the page confirms every command ("Clicked 12"), and the control tab shows what was heard.
-*   **Multi-language:** English, Spanish, Italian, French, German, Arabic and Japanese. Digits ("21") and words ("twenty-one") are both understood. The language is remembered.
+*   **Clear feedback:** a toast on the page confirms every command ("Clicked 12"), and matching badges highlight dynamically as you type digits.
+*   **Multi-language:** English, Spanish, Italian, French, German, Arabic and Japanese. Digits ("21") and words ("twenty-one") are both understood for voice commands. The language is remembered.
 *   **Non-intrusive:** labels are drawn in an overlay; the page's own layout and styles are not modified.
 
 ## How to Use
@@ -21,14 +24,14 @@ NumberNavigator is a browser extension designed for hands-free navigation of web
 1.  **Install** (same package for both browsers; unzip it first, or use `dist/numbernavigator/browser` after building):
     *   **Google Chrome:** open `chrome://extensions` -> enable *Developer mode* -> *Load unpacked* -> select the folder.
     *   **Microsoft Edge:** open `edge://extensions` -> enable *Developer mode* (left sidebar) -> *Load unpacked* -> select the folder.
-2.  Click the toolbar icon: the **control tab** opens. Press **Start** and allow the microphone.
+2.  Click the toolbar icon: the **control tab** opens. Choose your preferred navigation method (Voice, Keyboard, or Both). Press **Start** (and allow the microphone if Voice is enabled).
 3.  Switch to the website you want to control. **Keep the control tab open** (it can stay in the background).
-4.  Say the yellow number next to what you want to click. Say **0** to scroll down, **1** to scroll up.
-5.  Press **Stop** (in the control tab) to remove the numbers and turn the microphone off.
+4.  Say or type the yellow number next to what you want to click. Say/type **0** to scroll down, **1** to scroll up.
+5.  Press **Stop** (in the control tab) to remove the numbers and deactivate navigation.
 
 **Notes**
 
-*   Speech recognition uses the browser's online service, so an internet connection is required.
+*   Speech recognition uses the browser's online service, so an internet connection is required when using Voice mode. Keyboard mode works completely offline.
 *   Works on `http`/`https` pages only (not `chrome://` / `edge://` pages, the Chrome Web Store, Edge Add-ons or local files).
 *   Supported browsers: Google Chrome and Microsoft Edge (version 105 or later). Internet Explorer is not supported.
 *   On Edge/Windows, if the microphone starts but nothing is recognized, check *Settings -> Privacy -> Speech -> Online speech recognition*.
