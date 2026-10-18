@@ -109,6 +109,34 @@ h2
     padding: .4rem
     font: inherit
 
+.methods
+  margin: 0
+  padding: .6rem .9rem .8rem
+  border: 1px solid rgba(128, 128, 128, .35)
+  border-radius: .5rem
+  display: flex
+  flex-direction: column
+  gap: .5rem
+  legend
+    padding: 0 .4rem
+    font-weight: 600
+
+.check
+  display: flex
+  align-items: center
+  gap: .5rem
+  cursor: pointer
+  input
+    width: 1.1rem
+    height: 1.1rem
+    &:disabled
+      cursor: not-allowed
+
+.hint
+  margin: 0
+  font-size: .85rem
+  opacity: .75
+
 .feedback
   min-height: 3.2rem
   .heard

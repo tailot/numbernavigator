@@ -1,8 +1,8 @@
 /**
  * @file speech-to-number.component.ts
- * @description Controller UI of the extension (opened from the toolbar icon). It listens to the
- * microphone, converts what the user says into a number and sends the matching command
- * (click / scroll) to the content script of the website the user is looking at.
+ * @description Controller UI of the extension (opened from the toolbar icon). It listens to
+ * microphone speech and/or keyboard digits, converting them into actions and sending
+ * commands (click / scroll) to the content script of the active tab.
  */
 import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ActiveEngine, SpeechEngine, SpeechToTextService } from '../services/speech-to-text.service';
@@ -10,10 +10,16 @@ import { parseSpokenNumber } from './parse-number';
 import { Subscription } from 'rxjs';
 
 interface LanguageOption { name: string; code: string; }
+interface KeyTimeoutOption { ms: number; label: string; }
 type Feedback = { kind: 'ok' | 'info' | 'error'; text: string };
 
 const LANGUAGE_STORAGE_KEY = 'numbernavigator.language';
 const ENGINE_STORAGE_KEY = 'numbernavigator.engine';
+const VOICE_STORAGE_KEY = 'numbernavigator.voice';
+const KEYBOARD_STORAGE_KEY = 'numbernavigator.keyboard';
+const KEY_TIMEOUT_STORAGE_KEY = 'numbernavigator.keyTimeout';
+
+const DEFAULT_KEY_TIMEOUT_MS = 1000;
 const REFRESH_INTERVAL_MS = 3000;
 
 @Component({
@@ -35,10 +41,22 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     { name: '🇯🇵 日本語 (Japanese)', code: 'ja' },
   ];
 
+  readonly keyTimeoutOptions: KeyTimeoutOption[] = [
+    { ms: 600, label: '0.6 s (fast)' },
+    { ms: 1000, label: '1 s (default)' },
+    { ms: 1500, label: '1.5 s' },
+    { ms: 2000, label: '2 s' },
+    { ms: 3000, label: '3 s (slow)' },
+  ];
+
   readonly isBrowserSupported = this.speech.isBrowserSupported();
+  readonly voiceEnabled = signal(this.initialFlag(VOICE_STORAGE_KEY, true));
+  readonly keyboardEnabled = signal(this.initialFlag(KEYBOARD_STORAGE_KEY, false));
+  readonly keyTimeoutMs = signal(this.initialKeyTimeout());
+
   readonly isOnline = signal(navigator.onLine);
   readonly selectedLanguage = signal(this.initialLanguage());
-  /** User intent: navigation started (numbers shown + microphone on). */
+  /** User intent: navigation started (numbers shown). */
   readonly isActive = signal(false);
   readonly isListening = signal(false);
   readonly engine = signal<SpeechEngine>(this.initialEngine());
@@ -59,9 +77,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
   // ------------------------------------------------------------------ lifecycle
   ngOnInit(): void {
-    if (!this.isBrowserSupported) {
-      this.error.set('Speech recognition is not supported by this browser. Use Google Chrome or Microsoft Edge.');
-      return;
+    this.ensureAtLeastOneMethod();
+    if (!this.isBrowserSupported && this.voiceEnabled()) {
+      this.error.set('Speech recognition is not supported by this browser. Use Google Chrome or Microsoft Edge, or switch to keyboard navigation.');
     }
     this.subs.add(this.speech.getSpeechObservable().subscribe((text) => this.onSpeech(text)));
     this.subs.add(this.speech.getErrorObservable().subscribe((message) => {
@@ -72,8 +90,10 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.subs.add(this.speech.getActiveEngineObservable().subscribe((e) => this.activeEngine.set(e)));
     this.subs.add(this.speech.getListeningStateObservable().subscribe((listening) => {
       this.isListening.set(listening);
-      // A fatal error (e.g. microphone denied) stops listening for good: reflect it in the UI.
-      if (!listening && this.isActive() && this.error()) this.stop(false);
+      // A fatal error (e.g. microphone denied) stops listening: reflect it in UI if keyboard is off.
+      if (!listening && this.isActive() && this.voiceEnabled() && this.error() && !this.keyboardEnabled()) {
+        this.stop(false);
+      }
     }));
 
     // Follow the user while they move between tabs/pages: numbers must always match the visible page.
@@ -104,6 +124,37 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     if (this.isActive()) this.stop(); else this.start();
   }
 
+  onVoiceToggle(enabled: boolean): void {
+    if (!enabled && !this.keyboardEnabled()) return;
+    this.voiceEnabled.set(enabled);
+    this.saveFlag(VOICE_STORAGE_KEY, enabled);
+    this.error.set(null);
+    this.lastHeard.set(null);
+    if (this.isActive()) {
+      if (enabled) {
+        if (this.voiceUsable()) void this.speech.startListening(this.selectedLanguage(), this.engine());
+      } else {
+        if (this.isListening()) this.speech.stopListening();
+      }
+    }
+  }
+
+  onKeyboardToggle(enabled: boolean): void {
+    if (!enabled && !this.voiceEnabled()) return;
+    this.keyboardEnabled.set(enabled);
+    this.saveFlag(KEYBOARD_STORAGE_KEY, enabled);
+    void this.refreshActiveTab();
+  }
+
+  onKeyTimeoutChange(value: string | number): void {
+    const ms = Number(value);
+    if (this.keyTimeoutOptions.some((opt) => opt.ms === ms)) {
+      this.keyTimeoutMs.set(ms);
+      try { localStorage.setItem(KEY_TIMEOUT_STORAGE_KEY, String(ms)); } catch { /* ignore */ }
+      void this.refreshActiveTab();
+    }
+  }
+
   onLanguageChange(code: string): void {
     this.selectedLanguage.set(code);
     try { localStorage.setItem(LANGUAGE_STORAGE_KEY, code); } catch { /* storage unavailable */ }
@@ -122,14 +173,24 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     void this.speech.restart(this.selectedLanguage(), engine);
   }
 
+  canStart(): boolean {
+    return this.voiceUsable() || this.keyboardEnabled();
+  }
+
+  voiceUsable(): boolean {
+    return this.voiceEnabled() && this.isBrowserSupported && this.isOnline();
+  }
+
   private start(): void {
-    if (!this.isBrowserSupported || !this.isOnline()) return;
+    if (!this.canStart()) return;
     this.error.set(null);
     this.feedback.set(null);
     this.lastHeard.set(null);
     this.isActive.set(true);
     this.notice.set(null);
-    void this.speech.startListening(this.selectedLanguage(), this.engine());
+    if (this.voiceUsable()) {
+      void this.speech.startListening(this.selectedLanguage(), this.engine());
+    }
     void this.refreshActiveTab();
     this.refreshTimer = window.setInterval(() => void this.refreshActiveTab(), REFRESH_INTERVAL_MS);
   }
@@ -144,7 +205,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
   // ------------------------------------------------------------------ speech handling
   private onSpeech(text: string): void {
-    if (!this.isActive()) return;
+    if (!this.isActive() || !this.voiceEnabled()) return;
     this.lastHeard.set(text);
     this.error.set(null);
     const n = parseSpokenNumber(text, this.selectedLanguage());
@@ -186,7 +247,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       chrome.tabs.sendMessage(this.numberedTabId, { action: 'clearNumbers' }).catch(() => undefined);
     }
     this.numberedTabId = tab.id;
-    chrome.tabs.sendMessage(tab.id!, { action: 'numberClickables' }).catch(() => undefined);
+    chrome.tabs.sendMessage(tab.id!, {
+      action: 'numberClickables',
+      keyboard: this.keyboardEnabled(),
+      keyTimeout: this.keyTimeoutMs()
+    }).catch(() => undefined);
   }
 
   private async clearNumbersEverywhere(): Promise<void> {
@@ -207,6 +272,35 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       return await chrome.tabs.sendMessage(tab.id, message);
     } catch (e: any) {
       return { sendMessageError: e?.message ?? String(e) };
+    }
+  }
+
+  private initialFlag(key: string, defaultValue: boolean): boolean {
+    try {
+      const saved = localStorage.getItem(key);
+      if (saved === '1') return true;
+      if (saved === '0') return false;
+    } catch { /* ignore */ }
+    return defaultValue;
+  }
+
+  private saveFlag(key: string, value: boolean): void {
+    try {
+      localStorage.setItem(key, value ? '1' : '0');
+    } catch { /* ignore */ }
+  }
+
+  private initialKeyTimeout(): number {
+    try {
+      const saved = Number(localStorage.getItem(KEY_TIMEOUT_STORAGE_KEY));
+      if (this.keyTimeoutOptions.some((opt) => opt.ms === saved)) return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_KEY_TIMEOUT_MS;
+  }
+
+  private ensureAtLeastOneMethod(): void {
+    if (!this.voiceEnabled() && !this.keyboardEnabled()) {
+      this.voiceEnabled.set(true);
     }
   }
 

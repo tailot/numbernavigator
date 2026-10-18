@@ -11,6 +11,9 @@
  *    user reads is what the user can say. Numbers start at 2 (0 = scroll down, 1 = scroll up).
  *  - The overlay refreshes by itself after scroll / resize / DOM changes (debounced).
  *  - A small toast confirms every command inside the page.
+ *  - Optional keyboard navigation: digits typed on the page are collected in a buffer and accepted
+ *    after a short timeout (or immediately when no longer number could follow), so "1" then "2"
+ *    gives 12 while a lone "2" gives 2. Enabled/disabled by the controller (settings).
  */
 (() => {
   const w = window as any;
@@ -21,6 +24,10 @@
   const LAST_NUMBER = 200;
   const REFRESH_DEBOUNCE_MS = 150;
   const SCROLL_FRACTION = 0.8;
+  const DEFAULT_KEY_TIMEOUT_MS = 1000;
+  const MAX_DIGITS = String(LAST_NUMBER).length;
+  /** Accept the typed number at once when no other number could continue it (e.g. "5" with only 2..40). */
+  const COMMIT_WHEN_UNAMBIGUOUS = true;
 
   const SELECTORS = [
     'a[href]', 'button', 'summary', 'select', 'textarea', '[contenteditable=""]', '[contenteditable="true"]',
@@ -42,6 +49,12 @@
   let refreshTimer: number | undefined;
   let observer: MutationObserver | null = null;
 
+  // keyboard navigation
+  let keyboardEnabled = false;
+  let keyTimeoutMs = DEFAULT_KEY_TIMEOUT_MS;
+  let keyBuffer = '';
+  let keyTimer: number | undefined;
+
   // ---------------------------------------------------------------- overlay / styles
   function ensureOverlay(): HTMLElement {
     if (overlay && overlay.isConnected) return overlay;
@@ -52,7 +65,9 @@
         #number-navigator-overlay{position:fixed;inset:0;z-index:2147483647;pointer-events:none;margin:0;padding:0;border:0;}
         .number-navigator-badge{position:fixed;min-width:18px;padding:1px 5px;border-radius:9px;background:#ffd400;color:#111;
           font:700 12px/16px -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;text-align:center;
-          border:1px solid #111;box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;box-sizing:border-box;}
+          border:1px solid #111;box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;box-sizing:border-box;transition:opacity .15s,transform .15s;}
+        .number-navigator-badge.match{background:#00e676;color:#000;transform:scale(1.18);z-index:2147483647;}
+        .number-navigator-badge.dim{opacity:.35;}
         .number-navigator-flash{position:fixed;border:3px solid #00c853;border-radius:4px;background:rgba(0,200,83,.18);
           pointer-events:none;box-sizing:border-box;transition:opacity .5s ease-out;}
         #number-navigator-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:80vw;padding:8px 16px;
@@ -75,13 +90,13 @@
     return overlay;
   }
 
-  function toast(message: string, isError = false): void {
+  function toast(message: string, isError = false, timeout = 1800): void {
     ensureOverlay();
     if (!toastEl) return;
     toastEl.textContent = message;
     toastEl.className = 'visible' + (isError ? ' error' : '');
     window.clearTimeout(toastTimer);
-    toastTimer = window.setTimeout(() => toastEl && (toastEl.className = ''), 1800);
+    toastTimer = window.setTimeout(() => toastEl && (toastEl.className = ''), timeout);
   }
 
   function flash(element: HTMLElement): void {
@@ -178,6 +193,7 @@
 
   function deactivate(): void {
     active = false;
+    setKeyboard(false);
     window.removeEventListener('scroll', onViewportChange, true);
     window.removeEventListener('resize', onViewportChange);
     observer?.disconnect();
@@ -190,6 +206,128 @@
   }
 
   function onViewportChange(): void { scheduleRefresh(); }
+
+  // ---------------------------------------------------------------- keyboard navigation
+  /** True when the focused element uses digit keys itself (typing, list type-ahead, sliders...). */
+  function consumesDigits(el: EventTarget | null): boolean {
+    if (!(el instanceof HTMLElement)) return false;
+    if (el.isContentEditable) return true;
+    const role = el.getAttribute('role');
+    if (role && ['textbox', 'searchbox', 'combobox', 'spinbutton', 'slider'].includes(role)) return true;
+    if (el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') return true;
+    if (el.tagName !== 'INPUT') return false;
+    const t = ((el as HTMLInputElement).type || 'text').toLowerCase();
+    return !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'color'].includes(t);
+  }
+
+  function setKeyboard(enabled: boolean, timeoutMs?: number): void {
+    if (typeof timeoutMs === 'number' && timeoutMs >= 200 && timeoutMs <= 10000) {
+      keyTimeoutMs = timeoutMs;
+    }
+    if (enabled === keyboardEnabled) return;
+    keyboardEnabled = enabled;
+    if (enabled) {
+      window.addEventListener('keydown', onKeyDown, true);
+    } else {
+      window.removeEventListener('keydown', onKeyDown, true);
+      resetKeyBuffer();
+    }
+  }
+
+  function resetKeyBuffer(): void {
+    keyBuffer = '';
+    window.clearTimeout(keyTimer);
+    updateBadgeHighlight();
+  }
+
+  /** While digits are pending, highlight the numbers that can still match and dim the others. */
+  function updateBadgeHighlight(): void {
+    byNumber.forEach((e, n) => {
+      const text = String(n);
+      const matches = keyBuffer !== '' && text.startsWith(keyBuffer);
+      e.badge.classList.toggle('match', matches);
+      e.badge.classList.toggle('dim', keyBuffer !== '' && !matches);
+    });
+  }
+
+  /** True if some numbered element has a number that starts with `prefix` and is longer than it. */
+  function canBeExtended(prefix: string): boolean {
+    if (prefix.length >= MAX_DIGITS) return false;
+    for (const n of byNumber.keys()) {
+      const text = String(n);
+      if (text.length > prefix.length && text.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  function commitKeyBuffer(): void {
+    const n = parseInt(keyBuffer, 10);
+    resetKeyBuffer();
+    if (Number.isNaN(n)) return;
+    if (n === 0) scroll(1);
+    else if (n === 1) scroll(-1);
+    else clickNumber(n);
+  }
+
+  function onKeyDown(ev: KeyboardEvent): void {
+    if (!active || !keyboardEnabled || ev.isComposing) return;
+    const source = ev.composedPath()[0] ?? ev.target;
+    if (ev.key === 'Escape') {
+      if (keyBuffer) {
+        resetKeyBuffer();
+        toast('Cancelled');
+        ev.preventDefault();
+        ev.stopPropagation();
+      } else if (source instanceof HTMLElement && consumesDigits(source)) {
+        source.blur(); // leave the field so digits navigate again
+      }
+      return;
+    }
+
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if (consumesDigits(source)) return; // the user is typing in a field: never steal keys
+
+    const isDigit = /^[0-9]$/.test(ev.key);
+    const consume = () => { ev.preventDefault(); ev.stopPropagation(); };
+
+    if (isDigit) {
+      consume();
+      if (ev.repeat) return;
+      keyBuffer += ev.key;
+      updateBadgeHighlight();
+
+      const unambiguous = COMMIT_WHEN_UNAMBIGUOUS && !canBeExtended(keyBuffer);
+      if (unambiguous || keyBuffer.length >= MAX_DIGITS) {
+        commitKeyBuffer();
+        return;
+      }
+
+      toast(`Number: ${keyBuffer}…`, false, keyTimeoutMs + 400);
+      window.clearTimeout(keyTimer);
+      keyTimer = window.setTimeout(commitKeyBuffer, keyTimeoutMs);
+      return;
+    }
+
+    // Editing keys only matter while digits are pending
+    if (!keyBuffer) return;
+
+    if (ev.key === 'Enter') {
+      consume();
+      commitKeyBuffer();
+    } else if (ev.key === 'Backspace') {
+      consume();
+      keyBuffer = keyBuffer.slice(0, -1);
+      updateBadgeHighlight();
+      if (!keyBuffer) {
+        toast('Cancelled');
+        window.clearTimeout(keyTimer);
+        return;
+      }
+      toast(`Number: ${keyBuffer}…`, false, keyTimeoutMs + 400);
+      window.clearTimeout(keyTimer);
+      keyTimer = window.setTimeout(commitKeyBuffer, keyTimeoutMs);
+    }
+  }
 
   // ---------------------------------------------------------------- actions
   function isTextEntry(el: HTMLElement): boolean {
@@ -254,6 +392,7 @@
     switch (request.action) {
       case 'numberClickables': // also used as keep-alive / refresh by the controller
         activate();
+        setKeyboard(!!request.keyboard, request.keyTimeout);
         sendResponse({ status: 'Clickables numbered', count: entries.size });
         break;
       case 'clickElement':
