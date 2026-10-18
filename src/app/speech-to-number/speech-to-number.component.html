@@ -1,52 +1,67 @@
 <main>
   <header>
     <h1>Number Navigator</h1>
+    <p class="subtitle">Control any web page with your voice: say the number you see.</p>
   </header>
 
-  <section class="status-messages">
-    <div class="warning-message">
-      <strong>Warning:</strong> The extension manipulates page content. Caution is advised when activating this feature during important work sessions.
+  @if (error()) {
+    <div class="box error" role="alert">⚠️ {{ error() }}</div>
+  }
+  @if (!isOnline()) {
+    <div class="box error" role="alert">No internet connection: speech recognition needs it.</div>
+  }
+
+  <section class="controls" aria-label="Controls">
+    <button type="button" class="main-button" [class.stop]="isActive()"
+            [attr.aria-pressed]="isActive()"
+            [disabled]="!isBrowserSupported || (!isActive() && !isOnline())"
+            (click)="toggle()">
+      {{ isActive() ? '■ Stop' : '🎤 Start' }}
+    </button>
+
+    <div class="status" role="status" aria-live="polite">
+      <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
+      @if (!isActive()) { Stopped }
+      @else if (isListening()) { Listening… }
+      @else { Starting microphone… }
     </div>
-    @if (!isBrowserSupported) {
-      <div class="error-message">
-        <p>⚠️ {{ errorMessage }}</p>
-      </div>
-    }
-    @if (!isOnline) {
-      <p class="offline-message">Connection required to enable listening.</p>
-    }
+
+    <label class="language">
+      Language
+      <select [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
+        @for (lang of languages; track lang.code) {
+          <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
+        }
+      </select>
+    </label>
   </section>
 
-  <section class="controls-section">
-    <div>
-      <button class="start-button"
-              (click)="toggleContentScriptNumbering()"
-              [disabled]="!isOnline">
-        {{ isContentScriptNumberingActive ? 'Off' : 'On' }}
-      </button>
-    </div>
-    @if (isBrowserSupported) {
-      <div>
-        <hr />
-        <div class="controls">
-          <label for="language-select">🇺🇸🇮🇹🇪🇸🇫🇷🇩🇪🇸🇦🇯🇵</label>
-          <select [disabled]="isContentScriptNumberingActive" id="language-select" [ngModel]="selectedLanguage" (ngModelChange)="onLanguageChange($event)">
-            @for (lang of languages; track lang.code) {
-              <option [value]="lang.code">
-                {{ lang.name }}
-              </option>
-            }
-          </select>
-        </div>
-        <hr />
-      </div>
+  @if (isActive()) {
+    @if (!hasTargetTab()) {
+      <div class="box info">👉 Now switch to the website you want to control. This tab must stay open.</div>
     }
-  </section>
+    <section class="feedback" aria-live="polite">
+      @if (lastHeard()) { <div class="heard">Heard: “{{ lastHeard() }}”</div> }
+      @if (feedback(); as f) { <div class="result" [class]="'result ' + f.kind">{{ f.text }}</div> }
+    </section>
+  }
 
-  <section class="instructions-section">
-    <p class="instructions">
-      The functionality is activated using the 'On' button at the top. Once active, the extension will display numbers next to interactive elements on the page. You can interact with these elements by speaking the corresponding number. Additionally, the voice commands '0' (zero) and '1' (one) allow scrolling the page down and up, respectively.
-      Please note that the extension operates only on the current active tab where it has been enabled. For normal operation, ensure this tab remains open.
-    </p>
+  <section class="help">
+    <h2>Commands</h2>
+    <table>
+      <tr><th>Say</th><th>Effect</th></tr>
+      <tr><td>A number from <b>2</b> up</td><td>Clicks the element with that number (text fields get the cursor)</td></tr>
+      <tr><td><b>0</b> (zero)</td><td>Scroll down</td></tr>
+      <tr><td><b>1</b> (one)</td><td>Scroll up</td></tr>
+    </table>
+    <ol>
+      <li>Press <b>Start</b> and allow the microphone.</li>
+      <li>Go to the website you want to use (keep this tab open in the background).</li>
+      <li>Say the yellow number next to what you want to click.</li>
+    </ol>
+    <details>
+      <summary>Good to know</summary>
+      <p>Numbers stay the same while an element is on screen and update after scrolling or page changes. Only what is visible in the window is numbered. The extension adds an overlay to the page but does not change the page itself.</p>
+    </details>
   </section>
 </main>

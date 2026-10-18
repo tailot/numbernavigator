@@ -109,40 +109,47 @@ export class SpeechToTextService {
     console.log(`Speech Recognition language set to: ${language}`);
 
     this.recognition.onresult = (event: any) => {
-      const transcript = event.results[event.results.length - 1][0].transcript.trim();
-      this.ngZone.run(() => {
-        this.speechSubject.next(transcript);
-      });
+      // Handle every new final result (several can arrive in one event)
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (!event.results[i].isFinal) continue;
+        const transcript = event.results[i][0].transcript.trim();
+        if (transcript) this.ngZone.run(() => this.speechSubject.next(transcript));
+      }
     };
 
     this.recognition.onerror = (event: any) => {
       this.ngZone.run(() => {
-        let errorMessage = "An error occurred during speech recognition.";
-        if (event.error) {
-          switch (event.error) {
-            case 'no-speech':
-              errorMessage = 'No speech detected. Please try again.';
-              break;
-            case 'audio-capture':
-              errorMessage = "Could not capture audio. Ensure the microphone is enabled.";
-              break;
-            case 'not-allowed':
-              errorMessage = "Microphone access denied. Please allow access.";
-              break;
-            case 'network':
-              errorMessage = "A network error occurred. Check your connection.";
-              break;
-            default:
-              errorMessage = `Errore: ${event.error}`;
-          }
-          console.log('Speech recognition error:', event.error, errorMessage);
+        // Benign errors: silence or aborted session. The 'end' handler restarts listening.
+        if (event.error === 'no-speech' || event.error === 'aborted') return;
+
+        let errorMessage = `Speech recognition error: ${event.error}`;
+        let fatal = false;
+        switch (event.error) {
+          case 'audio-capture':
+            errorMessage = 'Could not capture audio. Check that a microphone is connected and enabled.';
+            fatal = true;
+            break;
+          case 'not-allowed':
+          case 'service-not-allowed':
+            errorMessage = 'Microphone access denied. Allow the microphone for this extension (lock icon in the address bar) and press Start again.';
+            fatal = true;
+            break;
+          case 'network':
+            errorMessage = 'Speech service unreachable. Check your internet connection.';
+            break;
+          case 'language-not-supported':
+            errorMessage = 'This language is not supported by the speech service.';
+            fatal = true;
+            break;
         }
+        console.log('Speech recognition error:', event.error);
         this.errorSubject.next(errorMessage);
-        if (this.isListening) {
+        if (fatal) {
+          // Stop for good: prevents an endless restart loop in onend
+          this.manualStopInitiated = true;
           this.isListening = false;
           this.listeningStateSubject.next(false);
         }
-        this.manualStopInitiated = false;
       });
     };
 
@@ -169,16 +176,15 @@ export class SpeechToTextService {
           this.manualStopInitiated = false;
         } else {
           console.log(`onEnd: Not a manual stop. wasListening at start of onEnd: ${wasListening}. Attempting to restart listening if previously listening.`);
-          this.isListening = false;
-          this.listeningStateSubject.next(false);
-          
           if (this.currentLanguage) {
             console.log(`Attempting to restart recognition in ${this.currentLanguage}`);
             try {
               this.recognition.start();
             } catch (e) {
               console.error('Error restarting recognition in onend:', e);
-              this.errorSubject.next("Error automatically restarting recognition.");
+              this.isListening = false;
+              this.listeningStateSubject.next(false);
+              this.errorSubject.next('Listening stopped unexpectedly. Press Start to resume.');
             }
           } else {
             console.warn('onEnd: Cannot restart listening, currentLanguage not set.');
@@ -215,6 +221,22 @@ export class SpeechToTextService {
       this.errorSubject.next("Could not start speech recognition. Already started or other error?");
       this.isListening = false;
       this.listeningStateSubject.next(false);
+    }
+  }
+
+  /**
+   * @method changeLanguage
+   * @param {string} language - New language code.
+   * @description Switches language on the fly: if listening, the current session is ended and the
+   * 'end' handler restarts it with the new language (no manual Stop/Start needed).
+   */
+  changeLanguage(language: string): void {
+    this.currentLanguage = language;
+    if (!this.recognition) return;
+    this.recognition.lang = language;
+    if (this.isListening) {
+      this.manualStopInitiated = false;
+      this.recognition.stop();
     }
   }
 

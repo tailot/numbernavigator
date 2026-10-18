@@ -4,42 +4,28 @@ NumberNavigator is a browser extension designed for hands-free navigation of web
 
 ## Core Features
 
-*   **Voice-Controlled Element Interaction:** Click on any detected clickable element on a webpage by saying its corresponding number.
-*   **Voice-Controlled Scrolling:** Scroll pages up or down using simple voice commands (e.g., "zero" for down, "one" for up).
-*   **Multi-Language Support:** Recognizes numbers spoken in various languages, including English, Spanish, Italian, French, German, Arabic, and Japanese.
-*   **Visual Numbering:** Overlays numbers on clickable elements for easy identification and interaction.
-*   **User-Friendly Interface:** Simple popup menu to control language settings, activate numbering, and start/stop voice recognition.
-*   **Cross-Platform:** Built as a standard browser extension, primarily for Chrome and Chromium-based browsers.
+*   **Voice-controlled clicking:** say the number shown next to any visible link, button, checkbox, menu, tab or field.
+*   **Text fields:** saying a field's number puts the cursor in it, ready to type or dictate.
+*   **Voice-controlled scrolling:** say "zero" to scroll down and "one" to scroll up (works on pages that scroll inside a container too).
+*   **Stable numbers:** an element keeps its number while it is on screen; numbers refresh automatically after scrolling, resizing or page changes.
+*   **Clear feedback:** a toast on the page confirms every command ("Clicked 12"), and the control tab shows what was heard.
+*   **Multi-language:** English, Spanish, Italian, French, German, Arabic and Japanese. Digits ("21") and words ("twenty-one") are both understood. The language is remembered.
+*   **Non-intrusive:** labels are drawn in an overlay; the page's own layout and styles are not modified.
 
 ## How to Use
 
-1.  **Installation (for Chrome/Chromium-based browsers):**
-    *   Download the latest release or clone this repository.
-    *   If you have a packaged version (`.zip`), unzip it to a dedicated folder.
-    *   Open your browser and navigate to `chrome://extensions`.
-    *   Enable "Developer mode" (usually a toggle in the top right corner).
-    *   Click on "Load unpacked".
-    *   Select the directory where you unzipped the extension files (or the `dist/numbernavigator/browser` directory if you built from source).
+1.  **Install (Chrome/Chromium):** `chrome://extensions` -> enable *Developer mode* -> *Load unpacked* -> select `dist/numbernavigator/browser` (after building) or the unzipped release folder.
+2.  Click the toolbar icon: the **control tab** opens. Press **Start** and allow the microphone.
+3.  Switch to the website you want to control. **Keep the control tab open** (it can stay in the background).
+4.  Say the yellow number next to what you want to click. Say **0** to scroll down, **1** to scroll up.
+5.  Press **Stop** (in the control tab) to remove the numbers and turn the microphone off.
 
-2.  **Using the Extension:**
-    *   Once installed, you should see the NumberNavigator icon (a stylized number) in your browser's toolbar. Click it to open the extension popup.
-    *   **Activate Numbering:** In the popup, click the "Toggle Numbering" button. This will scan the current web page and display numbers next to clickable elements. The button will change to "Deactivate Numbering".
-    *   **Voice Commands:**
-        *   Click the "Start Listening" button in the popup.
-        *   **To click an element:** Clearly say the number displayed next to the element you wish to interact with (e.g., "two", "fifteen").
-        *   **To scroll down:** Say "zero".
-        *   **To scroll up:** Say "one".
-        *   The extension will attempt to perform the action. Recognized speech and numbers will briefly appear in the popup.
-    *   **Change Language:** Select your preferred language from the dropdown menu in the popup. Recognition will adapt to the chosen language. If you change the language while listening is active, it will stop and you'll need to click "Start Listening" again.
-    *   **Stop Listening:** Click the "Stop Listening" button in the popup to deactivate voice recognition.
-    *   **Deactivate Numbering:** Click the "Deactivate Numbering" button (if active) to remove the number overlays from the page. This also stops listening if it's active.
+**Notes**
 
-**Important Notes:**
-
-*   The extension requires microphone permission. Your browser will likely prompt you for this the first time you try to use the voice recognition feature.
-*   Speech recognition accuracy can vary based on microphone quality, background noise, and pronunciation.
-*   Numbering works best on pages with clearly defined clickable elements (buttons, links, etc.).
-*   The content script that enables numbering and interaction is injected into `http` and `https` pages. It won't work on browser-internal pages (like `chrome://extensions`) or local files (`file:///...`) by default.
+*   Speech recognition uses the browser's online service, so an internet connection is required.
+*   Works on `http`/`https` pages only (not `chrome://` pages, the Web Store or local files).
+*   Numbers 2-200 are assigned, in page order, to elements currently visible in the window.
+*   Numbers are never assigned to elements hidden behind other content (modals, sticky bars).
 
 ## Building from Source
 
@@ -55,6 +41,7 @@ To build NumberNavigator from the source code, you'll need Node.js and npm (whic
     ```bash
     npm install
     ```
+    (`npm ci` also works: the unused `@angular-builders/custom-webpack` dependency that blocked it was removed.)
 
 3.  **Build the extension:**
     ```bash
