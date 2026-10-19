@@ -19,11 +19,26 @@
   const PROPS = ['onclick', 'onmousedown', 'onmouseup', 'onpointerdown', 'onpointerup'];
 
   function mark(target: unknown): void {
-    try {
-      if (target instanceof Element && target !== document.documentElement && target !== document.body && !target.hasAttribute(ATTR)) {
-        target.setAttribute(ATTR, '1');
-      }
-    } catch { /* never break the page */ }
+    if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
+
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    function tryMark() {
+      try {
+        if (!(target as Element).isConnected) {
+          if (++attempts < maxAttempts) {
+            requestAnimationFrame(tryMark);
+          }
+          return;
+        }
+        if (!(target as Element).hasAttribute(ATTR)) {
+          (target as Element).setAttribute(ATTR, '1');
+        }
+      } catch { /* never break the page */ }
+    }
+
+    requestAnimationFrame(tryMark);
   }
 
   const original = EventTarget.prototype.addEventListener;
