@@ -18,6 +18,7 @@ NumberNavigator is a browser extension designed for hands-free and keyboard-driv
 *   **Clear feedback:** a toast on the page confirms every command ("Clicked 12"), and matching badges highlight dynamically as you type digits.
 *   **Multi-language:** English, Spanish, Italian, French, German, Arabic and Japanese. Digits ("21") and words ("twenty-one") are both understood for voice commands. The language is remembered.
 *   **Follow cursor (optional):** turn it on in the control tab and a hairline empty square follows the mouse pointer. Numbers are shown, and available, only for elements inside the square; the rest of the page is not numbered. The square size is selectable. Voice, keyboard, scrolling and all other features work as usual.
+*   **Extra clickable elements (built in):** besides links, buttons and fields, the extension also numbers custom widgets such as hamburger menus (e.g. Wikipedia's), ARIA toggles, elements the page made clickable with scripts and elements shown with a pointer cursor. Always active, no setting needed. Detection is a list of pluggable *detectors* (`extraDetectors` in `src/content.ts`): to support another kind of clickable element, add one entry there. Click listeners are spotted by `src/page-hook.ts`, which runs in the page and only adds a `data-nn-listener` attribute to elements that receive click/mouse/pointer listeners.
 *   **Non-intrusive:** labels are drawn in an overlay; the page's own layout and styles are not modified.
 
 ## How to Use
@@ -34,7 +35,7 @@ NumberNavigator is a browser extension designed for hands-free and keyboard-driv
 
 *   Speech recognition uses the browser's online service, so an internet connection is required when using Voice mode. Keyboard mode works completely offline.
 *   Works on `http`/`https` pages only (not `chrome://` / `edge://` pages, the Chrome Web Store, Edge Add-ons or local files).
-*   Supported browsers: Google Chrome and Microsoft Edge (version 105 or later). Internet Explorer is not supported.
+*   Supported browsers: Google Chrome and Microsoft Edge (version 111 or later). Internet Explorer is not supported.
 *   On Edge/Windows, if the microphone starts but nothing is recognized, check *Settings -> Privacy -> Speech -> Online speech recognition*.
 *   Numbers 2-200 are assigned, in page order, to elements currently visible in the window.
 *   Numbers are never assigned to elements hidden behind other content (modals, sticky bars).

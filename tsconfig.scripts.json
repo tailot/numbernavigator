@@ -8,5 +8,5 @@
     "strict": true,
     "skipLibCheck": true
   },
-  "files": ["src/content.ts", "src/background.ts"]
+  "files": ["src/content.ts", "src/background.ts", "src/page-hook.ts"]
 }
