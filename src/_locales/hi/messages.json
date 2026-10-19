@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Number Navigator",
+    "description": "The name of the extension."
+  },
+  "extensionDescription": {
+    "message": "संख्याएं बोलकर या टाइप करके बिना हाथों के नेविगेट करें।",
+    "description": "The description of the extension."
+  },
+  "actionTitle": {
+    "message": "Number Navigator – नियंत्रण खोलें",
+    "description": "Title for extension browser action button."
+  }
+}

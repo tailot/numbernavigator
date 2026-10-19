@@ -28,6 +28,11 @@
                 "glob": "**/*",
                 "input": "src/assets"
               },
+              {
+                "glob": "**/*",
+                "input": "src/_locales",
+                "output": "_locales"
+              },
               "src/manifest.json",
               "src/favicon.ico"
             ],
