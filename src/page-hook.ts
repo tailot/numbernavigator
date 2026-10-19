@@ -19,11 +19,14 @@
   const PROPS = ['onclick', 'onmousedown', 'onmouseup', 'onpointerdown', 'onpointerup'];
 
   function mark(target: unknown): void {
-    try {
-      if (target instanceof Element && target !== document.documentElement && target !== document.body && !target.hasAttribute(ATTR)) {
-        target.setAttribute(ATTR, '1');
-      }
-    } catch { /* never break the page */ }
+    if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
+    queueMicrotask(() => {
+      try {
+        if (!target.hasAttribute(ATTR)) {
+          target.setAttribute(ATTR, '1');
+        }
+      } catch { /* never break the page */ }
+    });
   }
 
   const original = EventTarget.prototype.addEventListener;
