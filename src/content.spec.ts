@@ -138,4 +138,92 @@ describe('content script clicking', () => {
     expect(res.status).toBe('Clicked');
     expect(clicked).toBeTrue();
   });
+
+  it('should prioritize inner native buttons over outer tabindex container', async () => {
+    const container = document.createElement('div');
+    container.setAttribute('tabindex', '0');
+    container.style.position = 'fixed';
+    container.style.top = '200px';
+    container.style.left = '200px';
+    container.style.width = '200px';
+    container.style.height = '100px';
+    container.style.display = 'block';
+
+    const btn1 = document.createElement('button');
+    btn1.textContent = 'Upvote';
+    btn1.style.width = '80px';
+    btn1.style.height = '30px';
+    btn1.style.display = 'inline-block';
+
+    const btn2 = document.createElement('button');
+    btn2.textContent = 'Downvote';
+    btn2.style.width = '80px';
+    btn2.style.height = '30px';
+    btn2.style.display = 'inline-block';
+
+    container.appendChild(btn1);
+    container.appendChild(btn2);
+    document.body.appendChild(container);
+    createdElements.push(container);
+
+    let btn1Clicked = false;
+    let btn2Clicked = false;
+    btn1.addEventListener('click', () => { btn1Clicked = true; });
+    btn2.addEventListener('click', () => { btn2Clicked = true; });
+
+    await sendMessage({ action: 'numberClickables' });
+
+    // Click native buttons directly
+    btn1.click();
+    btn2.click();
+
+    expect(btn1Clicked).toBeTrue();
+    expect(btn2Clicked).toBeTrue();
+  });
+
+  it('should support native buttons inside custom elements like shreddit-vote-animations', async () => {
+    const shredditVote = document.createElement('shreddit-vote-animations');
+    shredditVote.style.position = 'fixed';
+    shredditVote.style.top = '300px';
+    shredditVote.style.left = '300px';
+    shredditVote.style.width = '150px';
+    shredditVote.style.height = '50px';
+    shredditVote.style.display = 'block';
+
+    const upvote = document.createElement('button');
+    upvote.setAttribute('data-action-bar-action', 'upvote');
+    upvote.textContent = 'Up';
+    upvote.style.width = '50px';
+    upvote.style.height = '30px';
+    upvote.style.display = 'inline-block';
+
+    const downvote = document.createElement('button');
+    downvote.setAttribute('data-action-bar-action', 'downvote');
+    downvote.textContent = 'Down';
+    downvote.style.width = '50px';
+    downvote.style.height = '30px';
+    downvote.style.display = 'inline-block';
+
+    shredditVote.appendChild(upvote);
+    shredditVote.appendChild(downvote);
+    document.body.appendChild(shredditVote);
+    createdElements.push(shredditVote);
+
+    let upClicked = false;
+    let downClicked = false;
+    upvote.addEventListener('click', () => { upClicked = true; });
+    downvote.addEventListener('click', () => { downClicked = true; });
+
+    await sendMessage({ action: 'numberClickables' });
+
+    const badges = Array.from(document.querySelectorAll('.number-navigator-badge'));
+    expect(badges.length).toBeGreaterThanOrEqual(2);
+
+    // Numbering works on upvote and downvote
+    upvote.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    downvote.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+
+    expect(upClicked).toBeTrue();
+    expect(downClicked).toBeTrue();
+  });
 });

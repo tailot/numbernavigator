@@ -326,6 +326,45 @@
     },
   ];
 
+  function isNativeControl(el: HTMLElement): boolean {
+    const tag = el.tagName;
+    if (tag === 'BUTTON' || tag === 'SELECT' || tag === 'TEXTAREA' || tag === 'SUMMARY') return true;
+    if (tag === 'A' && el.hasAttribute('href')) return true;
+    if (tag === 'INPUT' && (el as HTMLInputElement).type !== 'hidden') return true;
+    if (el.isContentEditable) return true;
+    const role = el.getAttribute('role');
+    if (role && [
+      'button', 'link', 'menuitem', 'menuitemcheckbox', 'menuitemradio',
+      'tab', 'checkbox', 'radio', 'option', 'treeitem',
+      'combobox', 'textbox', 'searchbox', 'slider', 'spinbutton', 'switch'
+    ].includes(role)) {
+      return true;
+    }
+    return false;
+  }
+
+  function pruneNestedCandidates(candidates: Candidate[]): Candidate[] {
+    const toRemove = new Set<Candidate>();
+    const len = candidates.length;
+    for (let i = 0; i < len; i++) {
+      const a = candidates[i];
+      for (let j = 0; j < len; j++) {
+        if (i === j) continue;
+        const b = candidates[j];
+        if (containsComposed(a.el, b.el)) {
+          if (!isNativeControl(a.el)) {
+            toRemove.add(a);
+          } else if (!isNativeControl(b.el)) {
+            toRemove.add(b);
+          } else {
+            toRemove.add(a);
+          }
+        }
+      }
+    }
+    return candidates.filter((c) => !toRemove.has(c));
+  }
+
   /** Standard candidates first, then the detectors' ones. A detector may only add relaxations to a standard one. */
   function collectCandidates(): Candidate[] {
     const map = new Map<HTMLElement, Candidate>();
@@ -388,8 +427,8 @@
     if (followCursor) ensureLens();
     const seen = new Set<HTMLElement>();
     const extraOf = new Map<HTMLElement, boolean>();
-    const usable = filterExtras(collectCandidates().filter((c) =>
-      !closestComposed(c.el, '#number-navigator-overlay') && isUsable(c.el, c.relax)));
+    const usable = pruneNestedCandidates(filterExtras(collectCandidates().filter((c) =>
+      !closestComposed(c.el, '#number-navigator-overlay') && isUsable(c.el, c.relax))));
     // detectors append out of page order: restore it so that "parents first" holds below
     usable.sort((a, b) => {
       if (a.el === b.el) return 0;
@@ -790,11 +829,10 @@
     const isNative = /^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|DETAILS|LABEL)$/.test(el.tagName);
     if (isNative) {
       if (typeof el.click === 'function') {
-        try { el.click(); } catch { /* ignore */ }
+        try { el.click(); return; } catch { /* ignore */ }
       }
-    } else {
-      target.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0 }));
     }
+    target.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0 }));
   }
 
   function clickNumber(n: number): { status: string; message?: string; number?: number } {
