@@ -1,8 +1,4 @@
 <p align="center">
-  <img src="src/assets/icons/icon128.png" alt="NumberNavigator Logo" width="128">
-</p>
-
-<p align="center">
   <img src="src/assets/numbernavigator-demo.gif" alt="NumberNavigator Demo">
 </p>
 
