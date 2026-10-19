@@ -22,6 +22,10 @@
  *    checkboxes + aria-hidden labels), ARIA toggles, elements with page click listeners
  *    (registered by page-hook.ts) and elements showing a pointer cursor. To support a new kind of
  *    clickable element, add one detector to that list.
+ *  - Show/hide numbers: a configurable "toggle number" (default 99, said or typed) hides the numbers
+ *    and the follow-cursor square. The extension stays active, but while hidden only the toggle
+ *    number is recognised and a small red dot near the pointer reminds the user. The same number
+ *    shows everything again. That number is reserved: no element is ever given it.
  */
 (() => {
   const w = window as any;
@@ -41,6 +45,10 @@
   const MIN_FOLLOW_SIZE_PX = 100;
   const MAX_FOLLOW_SIZE_PX = 1200;
   const FOLLOW_REFRESH_MS = 90;
+  /** Show/hide numbers: default command number, offset of the red dot from the pointer, race guard. */
+  const DEFAULT_TOGGLE_NUMBER = 99;
+  const DOT_OFFSET_PX = 14;
+  const LOCAL_TOGGLE_GRACE_MS = 800;
 
   const SELECTORS = [
     'a[href]', 'button', 'summary', 'select', 'textarea', '[contenteditable=""]', '[contenteditable="true"]',
@@ -100,6 +108,13 @@
   let extraDirty = true; // the (costly) cursor-pointer scan is redone only after page/viewport changes
   let pointerCache: HTMLElement[] = [];
 
+  // show/hide numbers ("toggle number")
+  let toggleNumber = DEFAULT_TOGGLE_NUMBER;
+  let numbersHidden = false;
+  let lastLocalToggleAt = 0;
+  let dotEl: HTMLElement | null = null;
+  let mouseTracked = false;
+
   // ---------------------------------------------------------------- overlay / styles
   function ensureOverlay(): HTMLElement {
     if (overlay && overlay.isConnected) return overlay;
@@ -115,6 +130,8 @@
         .number-navigator-badge.dim{opacity:.35;}
         .number-navigator-lens{position:fixed;margin:0;padding:0;box-sizing:border-box;background:transparent;pointer-events:none;
           border:1px solid #111;box-shadow:0 0 0 1px rgba(255,255,255,.75);}
+        .number-navigator-dot{position:fixed;width:12px;height:12px;margin:0;padding:0;box-sizing:border-box;border-radius:50%;
+          background:#e53935;border:2px solid #fff;box-shadow:0 0 0 1px rgba(0,0,0,.45);pointer-events:none;}
         .number-navigator-flash{position:fixed;border:3px solid #00c853;border-radius:4px;background:rgba(0,200,83,.18);
           pointer-events:none;box-sizing:border-box;transition:opacity .5s ease-out;}
         #number-navigator-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:80vw;padding:8px 16px;
@@ -281,7 +298,7 @@
   }
 
   function nextFreeNumber(): number | null {
-    for (let n = FIRST_NUMBER; n <= LAST_NUMBER; n++) if (!byNumber.has(n)) return n;
+    for (let n = FIRST_NUMBER; n <= LAST_NUMBER; n++) if (n !== toggleNumber && !byNumber.has(n)) return n;
     return null;
   }
 
@@ -295,6 +312,15 @@
   function refresh(): void {
     if (!active) return;
     const root = ensureOverlay();
+    if (numbersHidden) {
+      // Numbers off: nothing is drawn except the red dot that reminds the user
+      Array.from(entries.values()).forEach(removeEntry);
+      lensEl?.remove();
+      lensEl = null;
+      ensureDot();
+      return;
+    }
+    removeDot();
     if (followCursor) ensureLens();
     const seen = new Set<HTMLElement>();
     const extraOf = new Map<HTMLElement, boolean>();
@@ -359,6 +385,10 @@
     active = false;
     setKeyboard(false);
     setFollowCursor(false);
+    numbersHidden = false;
+    lastLocalToggleAt = 0;
+    removeDot();
+    updateMouseTracking();
     window.removeEventListener('scroll', onViewportChange, true);
     window.removeEventListener('resize', onViewportChange);
     observer?.disconnect();
@@ -411,7 +441,9 @@
     if (followRaf) return;
     followRaf = window.requestAnimationFrame(() => {
       followRaf = 0;
-      if (!active || !followCursor) return;
+      if (!active) return;
+      if (numbersHidden) { positionDot(); return; }
+      if (!followCursor) return;
       positionLens();
       // Throttled (not debounced): numbers follow the square while the mouse is still moving
       if (followRefreshTimer === undefined) {
@@ -427,17 +459,76 @@
     }
     if (enabled === followCursor) return;
     followCursor = enabled;
-    if (enabled) {
-      window.addEventListener('mousemove', onMouseMove, { capture: true, passive: true });
-    } else {
-      window.removeEventListener('mousemove', onMouseMove, true);
-      window.cancelAnimationFrame(followRaf);
-      followRaf = 0;
+    if (!enabled) {
       window.clearTimeout(followRefreshTimer);
       followRefreshTimer = undefined;
       lensEl?.remove();
       lensEl = null;
     }
+    updateMouseTracking();
+  }
+
+  /** The mouse listener is needed by the follow-cursor square and by the red "numbers hidden" dot. */
+  function updateMouseTracking(): void {
+    const needed = followCursor || numbersHidden;
+    if (needed && !mouseTracked) {
+      window.addEventListener('mousemove', onMouseMove, { capture: true, passive: true });
+      mouseTracked = true;
+    } else if (!needed && mouseTracked) {
+      window.removeEventListener('mousemove', onMouseMove, true);
+      mouseTracked = false;
+      window.cancelAnimationFrame(followRaf);
+      followRaf = 0;
+    }
+  }
+
+  // ---------------------------------------------------------------- show/hide numbers
+  function ensureDot(): void {
+    if (!dotEl || !dotEl.isConnected) {
+      dotEl = document.createElement('div');
+      dotEl.className = 'number-navigator-dot';
+      ensureOverlay().appendChild(dotEl);
+    }
+    positionDot();
+  }
+
+  function removeDot(): void {
+    dotEl?.remove();
+    dotEl = null;
+  }
+
+  function positionDot(): void {
+    if (!dotEl) return;
+    const x = cursorKnown ? cursorX : innerWidth / 2;
+    const y = cursorKnown ? cursorY : innerHeight / 2;
+    dotEl.style.left = Math.max(0, Math.min(x + DOT_OFFSET_PX, innerWidth - 14)) + 'px';
+    dotEl.style.top = Math.max(0, Math.min(y + DOT_OFFSET_PX, innerHeight - 14)) + 'px';
+  }
+
+  /** Sets the reserved number. An element that already holds it is renumbered at the next refresh. */
+  function setToggleNumber(n: unknown): void {
+    if (typeof n !== 'number' || !Number.isInteger(n) || n < FIRST_NUMBER || n > LAST_NUMBER || n === toggleNumber) return;
+    toggleNumber = n;
+    const clash = byNumber.get(n);
+    if (clash) removeEntry(clash);
+  }
+
+  function setNumbersHidden(hidden: boolean, announce: boolean): void {
+    if (hidden === numbersHidden) return;
+    numbersHidden = hidden;
+    resetKeyBuffer();
+    updateMouseTracking();
+    if (announce) toast(hidden ? `Numbers hidden – say or type ${toggleNumber} to show them` : 'Numbers shown', false, 2600);
+    refresh();
+  }
+
+  /** Toggle requested on the page (typed): apply it here and tell the controller, which owns the state. */
+  function toggleNumbersLocally(): void {
+    lastLocalToggleAt = Date.now();
+    setNumbersHidden(!numbersHidden, true);
+    try {
+      chrome.runtime.sendMessage({ action: 'numbersHiddenChanged', hidden: numbersHidden }).catch(() => undefined);
+    } catch { /* controller not reachable */ }
   }
 
   // ---------------------------------------------------------------- keyboard navigation
@@ -490,21 +581,49 @@
       const text = String(n);
       if (text.length > prefix.length && text.startsWith(prefix)) return true;
     }
-    return false;
+    const toggleText = String(toggleNumber); // the toggle number is a valid number too
+    return toggleText.length > prefix.length && toggleText.startsWith(prefix);
   }
 
   function commitKeyBuffer(): void {
     const n = parseInt(keyBuffer, 10);
     resetKeyBuffer();
     if (Number.isNaN(n)) return;
+    if (n === toggleNumber) { toggleNumbersLocally(); return; }
     if (n === 0) scroll(1);
     else if (n === 1) scroll(-1);
     else clickNumber(n);
   }
 
+  /**
+   * Numbers hidden: the page is left alone (no key is consumed, no field is blurred); the typed
+   * digits are only compared with the toggle number, and nothing else is recognised.
+   */
+  function onHiddenKey(ev: KeyboardEvent, source: EventTarget | null): void {
+    if (ev.ctrlKey || ev.altKey || ev.metaKey) return;
+    if (!/^[0-9]$/.test(ev.key)) {
+      if (!['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(ev.key)) resetKeyBuffer();
+      return;
+    }
+    if (consumesDigits(source)) { resetKeyBuffer(); return; } // typing in a field: never toggle
+    if (ev.repeat) return;
+    const text = String(toggleNumber);
+    let buffer = keyBuffer + ev.key;
+    if (!text.startsWith(buffer)) buffer = text.startsWith(ev.key) ? ev.key : '';
+    window.clearTimeout(keyTimer);
+    keyBuffer = buffer;
+    if (buffer === text) {
+      resetKeyBuffer();
+      toggleNumbersLocally();
+    } else if (buffer) {
+      keyTimer = window.setTimeout(resetKeyBuffer, keyTimeoutMs);
+    }
+  }
+
   function onKeyDown(ev: KeyboardEvent): void {
     if (!active || !keyboardEnabled || ev.isComposing) return;
     const source = ev.composedPath()[0] ?? ev.target;
+    if (numbersHidden) { onHiddenKey(ev, source); return; }
     if (ev.key === 'Escape') {
       if (keyBuffer) {
         resetKeyBuffer();
@@ -593,6 +712,7 @@
   }
 
   function clickNumber(n: number): { status: string; message?: string; number?: number } {
+    if (numbersHidden) return { status: 'Error', message: `Numbers are hidden – say ${toggleNumber} to show them` };
     const e = byNumber.get(n);
     if (!e) { toast(`No element numbered ${n}`, true); return { status: 'Error', message: `No element numbered ${n}` }; }
     const el = e.element;
@@ -632,7 +752,8 @@
     return null;
   }
 
-  function scroll(direction: 1 | -1): { status: string } {
+  function scroll(direction: 1 | -1): { status: string; message?: string } {
+    if (numbersHidden) return { status: 'Error', message: `Numbers are hidden – say ${toggleNumber} to show them` };
     const target = scrollTarget();
     const smooth = !matchMedia('(prefers-reduced-motion: reduce)').matches;
     const behavior: ScrollBehavior = smooth ? 'smooth' : 'auto';
@@ -648,6 +769,9 @@
     switch (request.action) {
       case 'numberClickables': // also used as keep-alive / refresh by the controller
         setFollowCursor(!!request.followCursor, request.followSize); // before activate(): it refreshes the numbers
+        setToggleNumber(request.toggleNumber);
+        // The controller owns the show/hide state (it survives tab changes); ignore its echo of a toggle just made here
+        if (Date.now() - lastLocalToggleAt > LOCAL_TOGGLE_GRACE_MS) setNumbersHidden(!!request.numbersHidden, active);
         activate();
         setKeyboard(!!request.keyboard, request.keyTimeout);
         sendResponse({ status: 'Clickables numbered', count: entries.size });

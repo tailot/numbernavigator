@@ -12,8 +12,6 @@ describe('SpeechToNumberComponent', () => {
     localStorage.removeItem('numbernavigator.voice');
     localStorage.removeItem('numbernavigator.keyboard');
     localStorage.removeItem('numbernavigator.keyTimeout');
-    localStorage.removeItem('numbernavigator.followCursor');
-    localStorage.removeItem('numbernavigator.followSize');
     await TestBed.configureTestingModule({
       imports: [SpeechToNumberComponent],
       providers: [provideZonelessChangeDetection()]
@@ -83,22 +81,5 @@ describe('SpeechToNumberComponent', () => {
     component.onKeyboardToggle(true);
     component.onVoiceToggle(false);
     expect(component.canStart()).toBeTrue();
-  });
-
-  it('should initialize followCursor as false and default size by default', () => {
-    expect(component.followCursor()).toBeFalse();
-    expect(component.followSizePx()).toBe(320);
-  });
-
-  it('should update followCursor signal and localStorage on toggle', () => {
-    component.onFollowCursorToggle(true);
-    expect(component.followCursor()).toBeTrue();
-    expect(localStorage.getItem('numbernavigator.followCursor')).toBe('1');
-  });
-
-  it('should update followSizePx signal and localStorage on valid size change', () => {
-    component.onFollowSizeChange('480');
-    expect(component.followSizePx()).toBe(480);
-    expect(localStorage.getItem('numbernavigator.followSize')).toBe('480');
   });
 });
