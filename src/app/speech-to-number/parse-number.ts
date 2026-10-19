@@ -8,10 +8,11 @@ import { numberWordMaps } from './number-words';
 
 export const MAX_SPOKEN_NUMBER = 200;
 
-/** Maps Eastern Arabic (٠-٩) and full-width (０-９) digits to ASCII digits. */
+/** Maps Eastern Arabic (٠-٩), Devanagari (०-९), and full-width (０-９) digits to ASCII digits. */
 function normalizeDigits(text: string): string {
   return text
     .replace(/[٠-٩]/g, (c) => String(c.charCodeAt(0) - 0x0660))
+    .replace(/[०-९]/g, (c) => String(c.charCodeAt(0) - 0x0966))
     .replace(/[０-９]/g, (c) => String(c.charCodeAt(0) - 0xff10));
 }
 

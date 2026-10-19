@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Number Navigator",
+    "description": "The name of the extension."
+  },
+  "extensionDescription": {
+    "message": "Naviguez les mains libres en parlant ou en tapant des numéros.",
+    "description": "The description of the extension."
+  },
+  "actionTitle": {
+    "message": "Number Navigator – ouvrir les commandes",
+    "description": "Title for extension browser action button."
+  }
+}

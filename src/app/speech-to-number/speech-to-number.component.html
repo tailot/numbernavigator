@@ -1,14 +1,14 @@
 <main>
   <header>
     <h1>Number Navigator</h1>
-    <p class="subtitle">Control any web page with your voice or keyboard: say or type the number you see.</p>
+    <p class="subtitle">{{ i18n.t('subtitle') }}</p>
   </header>
 
   @if (error()) {
     <div class="box error" role="alert">⚠️ {{ error() }}</div>
   }
   @if (!isOnline() && voiceEnabled()) {
-    <div class="box error" role="alert">No internet connection: speech recognition needs it.</div>
+    <div class="box error" role="alert">{{ i18n.t('noInternet') }}</div>
   }
 
   <section class="controls" aria-label="Controls">
@@ -16,32 +16,32 @@
             [attr.aria-pressed]="isActive()"
             [disabled]="!isActive() && !canStart()"
             (click)="toggle()">
-      {{ isActive() ? '■ Stop' : '🎤 Start' }}
+      {{ isActive() ? i18n.t('stopBtn') : i18n.t('startBtn') }}
     </button>
 
     <div class="status" role="status" aria-live="polite">
       <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
-      @if (!isActive()) { Stopped }
+      @if (!isActive()) { {{ i18n.t('statusStopped') }} }
       @else if (voiceEnabled()) {
-        @if (isListening()) { Listening… <span class="engine">({{ activeEngine() === 'local' ? 'on-device' : 'online' }})</span> }
-        @else { Starting microphone… }
+        @if (isListening()) { {{ i18n.t('statusListening') }} <span class="engine">({{ activeEngine() === 'local' ? i18n.t('engineLocal') : i18n.t('engineOnline') }})</span> }
+        @else { {{ i18n.t('statusStartingMicrophone') }} }
       }
-      @else { Keyboard active }
-      @if (isActive() && numbersHidden()) { <span class="hidden-flag">🔴 Numbers hidden</span> }
+      @else { {{ i18n.t('statusKeyboardActive') }} }
+      @if (isActive() && numbersHidden()) { <span class="hidden-flag">{{ i18n.t('statusNumbersHidden') }}</span> }
     </div>
 
     @if (voiceEnabled()) {
       <label class="language">
-        Engine
+        {{ i18n.t('engineLabel') }}
         <select [value]="engine()" (change)="onEngineChange($any($event.target).value)">
-          <option value="auto" [selected]="engine() === 'auto'">Automatic (recommended)</option>
-          <option value="cloud" [selected]="engine() === 'cloud'">Online service</option>
-          <option value="local" [selected]="engine() === 'local'">On-device (Edge, offline)</option>
+          <option value="auto" [selected]="engine() === 'auto'">{{ i18n.t('engineAuto') }}</option>
+          <option value="cloud" [selected]="engine() === 'cloud'">{{ i18n.t('engineCloud') }}</option>
+          <option value="local" [selected]="engine() === 'local'">{{ i18n.t('engineLocalOpt') }}</option>
         </select>
       </label>
 
       <label class="language">
-        Language
+        {{ i18n.t('languageLabel') }}
         <select [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
           @for (lang of languages; track lang.code) {
             <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
@@ -52,61 +52,61 @@
   </section>
 
   <fieldset class="methods">
-    <legend>Navigation method</legend>
+    <legend>{{ i18n.t('navMethodLegend') }}</legend>
     <label class="check">
       <input type="checkbox" [checked]="voiceEnabled()" [disabled]="voiceEnabled() && !keyboardEnabled()" (change)="onVoiceToggle($any($event.target).checked)">
-      🎤 Voice
+      {{ i18n.t('voiceCheckbox') }}
     </label>
     <label class="check">
       <input type="checkbox" [checked]="keyboardEnabled()" [disabled]="keyboardEnabled() && !voiceEnabled()" (change)="onKeyboardToggle($any($event.target).checked)">
-      ⌨️ Keyboard (type the number on the page)
+      {{ i18n.t('keyboardCheckbox') }}
     </label>
-    <p class="hint">Use one or both. At least one stays on: turn the other on first to switch.</p>
+    <p class="hint">{{ i18n.t('navMethodHint') }}</p>
     @if (keyboardEnabled()) {
       <label class="language">
-        Wait after last digit
+        {{ i18n.t('keyTimeoutLabel') }}
         <select [value]="keyTimeoutMs()" (change)="onKeyTimeoutChange($any($event.target).value)">
           @for (opt of keyTimeoutOptions; track opt.ms) {
-            <option [value]="opt.ms" [selected]="opt.ms === keyTimeoutMs()">{{ opt.label }}</option>
+            <option [value]="opt.ms" [selected]="opt.ms === keyTimeoutMs()">{{ i18n.t(opt.labelKey) }}</option>
           }
         </select>
       </label>
-      <p class="hint">Type 1 then 2 quickly for 12. Enter confirms, Backspace deletes, Esc cancels. When only one number can match, it runs immediately.</p>
+      <p class="hint">{{ i18n.t('keyTimeoutHint') }}</p>
     }
   </fieldset>
 
   <fieldset class="methods">
-    <legend>Follow cursor</legend>
+    <legend>{{ i18n.t('followCursorLegend') }}</legend>
     <label class="check">
       <input type="checkbox" [checked]="followCursor()" (change)="onFollowCursorToggle($any($event.target).checked)">
-      🔲 Follow cursor (numbers only around the mouse pointer)
+      {{ i18n.t('followCursorCheckbox') }}
     </label>
     @if (followCursor()) {
       <label class="language">
-        Square size
+        {{ i18n.t('squareSizeLabel') }}
         <select [value]="followSizePx()" (change)="onFollowSizeChange($any($event.target).value)">
           @for (opt of followSizeOptions; track opt.px) {
-            <option [value]="opt.px" [selected]="opt.px === followSizePx()">{{ opt.label }}</option>
+            <option [value]="opt.px" [selected]="opt.px === followSizePx()">{{ i18n.t(opt.labelKey) }}</option>
           }
         </select>
       </label>
-      <p class="hint">A thin empty square follows the mouse pointer on the page. Only the elements inside it get a number; the rest of the page is not numbered. Move the pointer to change what you can reach. Works with voice and keyboard.</p>
+      <p class="hint">{{ i18n.t('followCursorHintOn') }}</p>
     } @else {
-      <p class="hint">Off: every visible element of the page is numbered.</p>
+      <p class="hint">{{ i18n.t('followCursorHintOff') }}</p>
     }
   </fieldset>
 
   <fieldset class="methods">
-    <legend>Show / hide numbers</legend>
+    <legend>{{ i18n.t('commandNumberLegend') }}</legend>
     <label class="language">
-      Command number
+      {{ i18n.t('commandNumberLabel') }}
       <input #toggleInput type="number" min="2" max="200" step="1" [value]="toggleNumber()"
              (change)="onToggleNumberChange(toggleInput)" aria-describedby="toggle-hint">
     </label>
     @if (toggleNumberError()) {
       <p class="hint error-text" role="alert">{{ toggleNumberError() }}</p>
     }
-    <p class="hint" id="toggle-hint">Say or type this number to hide the numbers (and the square, with Follow cursor); say or type it again to show them. While they are hidden the extension keeps listening, only this number works, and a small red dot near the pointer reminds you. Default: 99. No element is ever given this number.</p>
+    <p class="hint" id="toggle-hint">{{ i18n.t('commandNumberHint') }}</p>
   </fieldset>
 
   @if (modelStatus()) {
@@ -118,31 +118,31 @@
 
   @if (isActive()) {
     @if (!hasTargetTab()) {
-      <div class="box info">👉 Now switch to the website you want to control. This tab must stay open.</div>
+      <div class="box info">{{ i18n.t('switchTabNotice') }}</div>
     }
     <section class="feedback" aria-live="polite">
-      @if (lastHeard()) { <div class="heard">Heard: “{{ lastHeard() }}”</div> }
+      @if (lastHeard()) { <div class="heard">{{ i18n.t('heardText', { text: lastHeard()! }) }}</div> }
       @if (feedback(); as f) { <div class="result" [class]="'result ' + f.kind">{{ f.text }}</div> }
     </section>
   }
 
   <section class="help">
-    <h2>Commands</h2>
+    <h2>{{ i18n.t('commandsHeading') }}</h2>
     <table>
-      <tr><th>Say or type</th><th>Effect</th></tr>
-      <tr><td>A number from <b>2</b> up</td><td>Clicks the element with that number (text fields get the cursor)</td></tr>
-      <tr><td><b>0</b> (zero)</td><td>Scroll down</td></tr>
-      <tr><td><b>1</b> (one)</td><td>Scroll up</td></tr>
-      <tr><td><b>{{ toggleNumber() }}</b> (command number)</td><td>Hides / shows the numbers. While hidden only this number works</td></tr>
+      <tr><th>{{ i18n.t('thSayOrType') }}</th><th>{{ i18n.t('thEffect') }}</th></tr>
+      <tr><td>{{ i18n.t('cmdNumber', { min: 2 }) }}</td><td>{{ i18n.t('cmdNumberEffect') }}</td></tr>
+      <tr><td><b>{{ i18n.t('cmdZero') }}</b></td><td>{{ i18n.t('cmdZeroEffect') }}</td></tr>
+      <tr><td><b>{{ i18n.t('cmdOne') }}</b></td><td>{{ i18n.t('cmdOneEffect') }}</td></tr>
+      <tr><td><b>{{ i18n.t('cmdToggleNumber', { num: toggleNumber() }) }}</b></td><td>{{ i18n.t('cmdToggleEffect') }}</td></tr>
     </table>
     <ol>
-      <li>Press <b>Start</b> and allow the microphone.</li>
-      <li>Go to the website you want to use (keep this tab open in the background).</li>
-      <li>Say (or type, if the keyboard is on) the yellow number next to what you want to click.</li>
+      <li>{{ i18n.t('step1') }}</li>
+      <li>{{ i18n.t('step2') }}</li>
+      <li>{{ i18n.t('step3') }}</li>
     </ol>
     <details>
-      <summary>Good to know</summary>
-      <p>Numbers stay the same while an element is on screen and update after scrolling or page changes. Only what is visible in the window is numbered (or, with <b>Follow cursor</b>, only what is inside the square around the pointer). The extension adds an overlay to the page but does not change the page itself.</p>
+      <summary>{{ i18n.t('goodToKnowSummary') }}</summary>
+      <p>{{ i18n.t('goodToKnowDetails') }}</p>
     </details>
   </section>
 </main>

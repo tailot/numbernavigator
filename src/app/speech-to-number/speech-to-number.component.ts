@@ -6,15 +6,14 @@
  */
 import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ActiveEngine, SpeechEngine, SpeechToTextService } from '../services/speech-to-text.service';
+import { I18nService, LANGUAGE_STORAGE_KEY } from '../services/i18n.service';
 import { MAX_SPOKEN_NUMBER, parseSpokenNumber } from './parse-number';
 import { Subscription } from 'rxjs';
 
-interface LanguageOption { name: string; code: string; }
-interface KeyTimeoutOption { ms: number; label: string; }
-interface FollowSizeOption { px: number; label: string; }
+interface KeyTimeoutOption { ms: number; labelKey: string; }
+interface FollowSizeOption { px: number; labelKey: string; }
 type Feedback = { kind: 'ok' | 'info' | 'error'; text: string };
 
-const LANGUAGE_STORAGE_KEY = 'numbernavigator.language';
 const ENGINE_STORAGE_KEY = 'numbernavigator.engine';
 const VOICE_STORAGE_KEY = 'numbernavigator.voice';
 const KEYBOARD_STORAGE_KEY = 'numbernavigator.keyboard';
@@ -39,30 +38,23 @@ const REFRESH_INTERVAL_MS = 3000;
 })
 export class SpeechToNumberComponent implements OnInit, OnDestroy {
   private readonly speech = inject(SpeechToTextService);
+  readonly i18n = inject(I18nService);
 
-  readonly languages: LanguageOption[] = [
-    { name: '🇺🇸 English', code: 'en' },
-    { name: '🇮🇹 Italiano', code: 'it' },
-    { name: '🇪🇸 Español', code: 'es' },
-    { name: '🇫🇷 Français', code: 'fr' },
-    { name: '🇩🇪 Deutsch', code: 'de' },
-    { name: '🇸🇦 العربية (Arabic)', code: 'ar' },
-    { name: '🇯🇵 日本語 (Japanese)', code: 'ja' },
-  ];
+  readonly languages = this.i18n.supportedLanguages;
 
   readonly keyTimeoutOptions: KeyTimeoutOption[] = [
-    { ms: 600, label: '0.6 s (fast)' },
-    { ms: 1000, label: '1 s (default)' },
-    { ms: 1500, label: '1.5 s' },
-    { ms: 2000, label: '2 s' },
-    { ms: 3000, label: '3 s (slow)' },
+    { ms: 600, labelKey: 'timeoutFast' },
+    { ms: 1000, labelKey: 'timeoutDefault' },
+    { ms: 1500, labelKey: 'timeout1_5' },
+    { ms: 2000, labelKey: 'timeout2' },
+    { ms: 3000, labelKey: 'timeoutSlow' },
   ];
 
   readonly followSizeOptions: FollowSizeOption[] = [
-    { px: 200, label: 'Small (200 px)' },
-    { px: 320, label: 'Medium (320 px, default)' },
-    { px: 480, label: 'Large (480 px)' },
-    { px: 640, label: 'Extra large (640 px)' },
+    { px: 200, labelKey: 'squareSmall' },
+    { px: 320, labelKey: 'squareMedium' },
+    { px: 480, labelKey: 'squareLarge' },
+    { px: 640, labelKey: 'squareExtraLarge' },
   ];
 
   readonly isBrowserSupported = this.speech.isBrowserSupported();
@@ -79,7 +71,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   readonly numbersHidden = signal(false);
 
   readonly isOnline = signal(navigator.onLine);
-  readonly selectedLanguage = signal(this.initialLanguage());
+  readonly selectedLanguage = signal(this.i18n.currentLanguage());
   /** User intent: navigation started (numbers shown). */
   readonly isActive = signal(false);
   readonly isListening = signal(false);
@@ -103,7 +95,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   ngOnInit(): void {
     this.ensureAtLeastOneMethod();
     if (!this.isBrowserSupported && this.voiceEnabled()) {
-      this.error.set('Speech recognition is not supported by this browser. Use Google Chrome or Microsoft Edge, or switch to keyboard navigation.');
+      this.error.set(this.i18n.t('speechNotSupported'));
     }
     this.subs.add(this.speech.getSpeechObservable().subscribe((text) => this.onSpeech(text)));
     this.subs.add(this.speech.getErrorObservable().subscribe((message) => {
@@ -181,7 +173,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   onToggleNumberChange(input: HTMLInputElement): void {
     const value = Number(input.value);
     if (input.value.trim() === '' || !Number.isInteger(value) || value < MIN_TOGGLE_NUMBER || value > MAX_TOGGLE_NUMBER) {
-      this.toggleNumberError.set(`Enter a whole number from ${MIN_TOGGLE_NUMBER} to ${MAX_TOGGLE_NUMBER} (0 and 1 are used for scrolling).`);
+      this.toggleNumberError.set(this.i18n.t('toggleNumberError', { min: MIN_TOGGLE_NUMBER, max: MAX_TOGGLE_NUMBER }));
       input.value = String(this.toggleNumber());
       return;
     }
@@ -217,7 +209,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
   onLanguageChange(code: string): void {
     this.selectedLanguage.set(code);
-    try { localStorage.setItem(LANGUAGE_STORAGE_KEY, code); } catch { /* storage unavailable */ }
+    this.i18n.setLanguage(code);
     this.lastHeard.set(null);
     this.feedback.set(null);
     this.notice.set(null);
@@ -272,13 +264,13 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.error.set(null);
     const n = parseSpokenNumber(text, this.selectedLanguage());
     if (n === null) {
-      this.feedback.set({ kind: 'info', text: 'Not a number – say the number shown on the page.' });
+      this.feedback.set({ kind: 'info', text: this.i18n.t('notANumber') });
       return;
     }
     if (n === this.toggleNumber()) { this.toggleNumbersHidden(); return; }
     if (this.numbersHidden()) {
       // Hidden: numbers (and scrolling) are not available, only the toggle number is
-      this.feedback.set({ kind: 'info', text: `Numbers are hidden – say ${this.toggleNumber()} to show them.` });
+      this.feedback.set({ kind: 'info', text: this.i18n.t('numbersHiddenNotice', { num: this.toggleNumber() }) });
       return;
     }
     void this.runCommand(n);
@@ -287,7 +279,10 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   private toggleNumbersHidden(): void {
     const hidden = !this.numbersHidden();
     this.numbersHidden.set(hidden);
-    this.feedback.set({ kind: 'ok', text: hidden ? `✓ Numbers hidden – say ${this.toggleNumber()} to show them` : '✓ Numbers shown' });
+    this.feedback.set({
+      kind: 'ok',
+      text: hidden ? this.i18n.t('numbersHiddenSuccess', { num: this.toggleNumber() }) : this.i18n.t('numbersShownSuccess')
+    });
     void this.refreshActiveTab();
   }
 
@@ -295,20 +290,23 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     if (request?.action !== 'numbersHiddenChanged' || !this.isActive()) return;
     const hidden = !!request.hidden;
     this.numbersHidden.set(hidden);
-    this.feedback.set({ kind: 'ok', text: hidden ? `✓ Numbers hidden – type ${this.toggleNumber()} to show them` : '✓ Numbers shown' });
+    this.feedback.set({
+      kind: 'ok',
+      text: hidden ? this.i18n.t('numbersHiddenSuccessKeyboard', { num: this.toggleNumber() }) : this.i18n.t('numbersShownSuccess')
+    });
   };
 
   private async runCommand(n: number): Promise<void> {
     const message = n === 0 ? { action: 'scrollDown' } : n === 1 ? { action: 'scrollUp' } : { action: 'clickElement', number: n };
-    const label = n === 0 ? 'Scrolled down' : n === 1 ? 'Scrolled up' : `Clicked ${n}`;
+    const label = n === 0 ? this.i18n.t('scrolledDownSuccess') : n === 1 ? this.i18n.t('scrolledUpSuccess') : this.i18n.t('clickedSuccess', { num: n });
     const response = await this.sendToActiveTab(message);
     if (response?.status === 'Clicked' || response?.status === 'Scrolled down' || response?.status === 'Scrolled up') {
-      this.feedback.set({ kind: 'ok', text: `✓ ${label}` });
+      this.feedback.set({ kind: 'ok', text: label });
     } else if (response?.sendMessageError || response?.error) {
       this.hasTargetTab.set(false);
-      this.feedback.set({ kind: 'error', text: 'Open the website you want to control in another tab, then try again.' });
+      this.feedback.set({ kind: 'error', text: this.i18n.t('openWebsiteError') });
     } else {
-      this.feedback.set({ kind: 'error', text: response?.message ?? 'The page did not respond. Try reloading it.' });
+      this.feedback.set({ kind: 'error', text: response?.message ?? this.i18n.t('pageNoResponseError') });
     }
   }
 
@@ -414,12 +412,4 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     return 'auto';
   }
 
-  private initialLanguage(): string {
-    try {
-      const saved = localStorage.getItem(LANGUAGE_STORAGE_KEY);
-      if (saved && this.languages.some((l) => l.code === saved)) return saved;
-    } catch { /* ignore */ }
-    const browser = (navigator.language || 'en').split('-')[0];
-    return this.languages.some((l) => l.code === browser) ? browser : 'en';
-  }
 }

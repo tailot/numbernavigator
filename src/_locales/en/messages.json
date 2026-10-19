@@ -1,0 +1,14 @@
+{
+  "extensionName": {
+    "message": "Number Navigator",
+    "description": "The name of the extension."
+  },
+  "extensionDescription": {
+    "message": "Navigate hands-free by speaking or typing numbers.",
+    "description": "The description of the extension."
+  },
+  "actionTitle": {
+    "message": "Number Navigator – open controls",
+    "description": "Title for extension browser action button."
+  }
+}
