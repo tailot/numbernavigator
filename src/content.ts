@@ -708,7 +708,15 @@
     try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
     target.dispatchEvent(new PointerEvent('pointerup', { ...base, ...pointer, buttons: 0 }));
     target.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0 }));
-    target.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0 }));
+
+    const isNative = /^(A|BUTTON|INPUT|SELECT|TEXTAREA|SUMMARY|DETAILS|LABEL)$/.test(el.tagName);
+    if (isNative) {
+      if (typeof el.click === 'function') {
+        try { el.click(); } catch { /* ignore */ }
+      }
+    } else {
+      target.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0 }));
+    }
   }
 
   function clickNumber(n: number): { status: string; message?: string; number?: number } {
@@ -727,12 +735,8 @@
       el.focus();
       try { (el as HTMLSelectElement).showPicker(); } catch { el.click(); }
       toast(`Opened list ${n}`);
-    } else if (e.extra) {
-      pressElement(el);
-      toast(`Clicked ${n}`);
     } else {
-      el.focus({ preventScroll: true });
-      el.click();
+      pressElement(el);
       toast(`Clicked ${n}`);
     }
     scheduleRefresh(350); // the page may have changed after the click
@@ -765,37 +769,39 @@
   }
 
   // ---------------------------------------------------------------- messaging
-  chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
-    switch (request.action) {
-      case 'numberClickables': // also used as keep-alive / refresh by the controller
-        setFollowCursor(!!request.followCursor, request.followSize); // before activate(): it refreshes the numbers
-        setToggleNumber(request.toggleNumber);
-        // The controller owns the show/hide state (it survives tab changes); ignore its echo of a toggle just made here
-        if (Date.now() - lastLocalToggleAt > LOCAL_TOGGLE_GRACE_MS) setNumbersHidden(!!request.numbersHidden, active);
-        activate();
-        setKeyboard(!!request.keyboard, request.keyTimeout);
-        sendResponse({ status: 'Clickables numbered', count: entries.size });
-        break;
-      case 'clickElement':
-        sendResponse(clickNumber(request.number));
-        break;
-      case 'clearNumbers':
-        deactivate();
-        sendResponse({ status: 'Numbers cleared' });
-        break;
-      case 'scrollUp':
-        sendResponse(scroll(-1));
-        break;
-      case 'scrollDown':
-        sendResponse(scroll(1));
-        break;
-      case 'showMessage': // lets the controller show feedback (e.g. "not understood") on the page
-        if (active) toast(String(request.text ?? ''), !!request.isError);
-        sendResponse({ status: 'ok' });
-        break;
-      default:
-        return false;
-    }
-    return false;
-  });
+  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+    chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+      switch (request.action) {
+        case 'numberClickables': // also used as keep-alive / refresh by the controller
+          setFollowCursor(!!request.followCursor, request.followSize); // before activate(): it refreshes the numbers
+          setToggleNumber(request.toggleNumber);
+          // The controller owns the show/hide state (it survives tab changes); ignore its echo of a toggle just made here
+          if (Date.now() - lastLocalToggleAt > LOCAL_TOGGLE_GRACE_MS) setNumbersHidden(!!request.numbersHidden, active);
+          activate();
+          setKeyboard(!!request.keyboard, request.keyTimeout);
+          sendResponse({ status: 'Clickables numbered', count: entries.size });
+          break;
+        case 'clickElement':
+          sendResponse(clickNumber(request.number));
+          break;
+        case 'clearNumbers':
+          deactivate();
+          sendResponse({ status: 'Numbers cleared' });
+          break;
+        case 'scrollUp':
+          sendResponse(scroll(-1));
+          break;
+        case 'scrollDown':
+          sendResponse(scroll(1));
+          break;
+        case 'showMessage': // lets the controller show feedback (e.g. "not understood") on the page
+          if (active) toast(String(request.text ?? ''), !!request.isError);
+          sendResponse({ status: 'ok' });
+          break;
+        default:
+          return false;
+      }
+      return false;
+    });
+  }
 })();
