@@ -20,13 +20,25 @@
 
   function mark(target: unknown): void {
     if (!(target instanceof Element) || target === document.documentElement || target === document.body) return;
-    queueMicrotask(() => {
+
+    let attempts = 0;
+    const maxAttempts = 30;
+
+    function tryMark() {
       try {
-        if (!target.hasAttribute(ATTR)) {
-          target.setAttribute(ATTR, '1');
+        if (!(target as Element).isConnected) {
+          if (++attempts < maxAttempts) {
+            requestAnimationFrame(tryMark);
+          }
+          return;
+        }
+        if (!(target as Element).hasAttribute(ATTR)) {
+          (target as Element).setAttribute(ATTR, '1');
         }
       } catch { /* never break the page */ }
-    });
+    }
+
+    requestAnimationFrame(tryMark);
   }
 
   const original = EventTarget.prototype.addEventListener;
