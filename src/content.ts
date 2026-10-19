@@ -17,6 +17,11 @@
  *  - Optional "follow cursor" mode: a hairline empty square is drawn around the mouse pointer and
  *    numbers exist ONLY for the elements inside that square (the rest of the page is not numbered).
  *    Everything else (voice/keyboard commands, scrolling, stable numbers, toasts) is unchanged.
+ *  - Extensible click detection: besides the standard selectors, a list of pluggable DETECTORS
+ *    (see `extraDetectors`) finds custom clickable widgets such as hamburger menus (transparent
+ *    checkboxes + aria-hidden labels), ARIA toggles, elements with page click listeners
+ *    (registered by page-hook.ts) and elements showing a pointer cursor. To support a new kind of
+ *    clickable element, add one detector to that list.
  */
 (() => {
   const w = window as any;
@@ -46,7 +51,25 @@
     '[onclick]', '[tabindex]:not([tabindex="-1"])',
   ].join(',');
 
-  interface Entry { element: HTMLElement; number: number; badge: HTMLElement; }
+  interface Entry { element: HTMLElement; number: number; badge: HTMLElement; extra: boolean; }
+
+  /** Visibility checks a detector may relax for its candidates (e.g. invisible overlay controls). */
+  interface Relax { transparent?: boolean; ariaHidden?: boolean; }
+  /** An element that may receive a number. `extra` = not found by the standard selectors. */
+  interface Candidate { el: HTMLElement; extra: boolean; relax?: Relax; }
+  /** A pluggable strategy that finds additional clickable elements. */
+  interface ClickDetector { id: string; description: string; collect(): Candidate[]; }
+
+  /** Attribute set by page-hook.ts (page world) on elements that got a click-like listener. */
+  const PAGE_LISTENER_ATTR = 'data-nn-listener';
+  /** Extra candidates larger than this fraction of the window are page/layout containers, not buttons. */
+  const MAX_EXTRA_AREA_FRACTION = 0.5;
+  const MAX_POINTER_SCAN_ELEMENTS = 15000;
+  /** Attribute-based hints that an element is a toggle/menu button even if it is not a <button>. */
+  const EXTRA_SELECTORS = [
+    '[aria-haspopup]:not([aria-haspopup="false"])', '[aria-expanded]', '[aria-controls]',
+    '[data-toggle]', '[data-bs-toggle]',
+  ].join(',');
 
   let active = false;
   const entries = new Map<HTMLElement, Entry>();
@@ -72,6 +95,10 @@
   let lensEl: HTMLElement | null = null;
   let followRaf = 0;
   let followRefreshTimer: number | undefined;
+
+  // extra click detection
+  let extraDirty = true; // the (costly) cursor-pointer scan is redone only after page/viewport changes
+  let pointerCache: HTMLElement[] = [];
 
   // ---------------------------------------------------------------- overlay / styles
   function ensureOverlay(): HTMLElement {
@@ -130,8 +157,9 @@
   }
 
   // ---------------------------------------------------------------- element detection
-  function isUsable(el: HTMLElement): boolean {
-    if ((el as HTMLInputElement).disabled || el.getAttribute('aria-hidden') === 'true') return false;
+  function isUsable(el: HTMLElement, relax?: Relax): boolean {
+    if ((el as HTMLInputElement).disabled) return false;
+    if (el.getAttribute('aria-hidden') === 'true' && !relax?.ariaHidden) return false;
     const r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return false;
     if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) return false;
@@ -140,7 +168,9 @@
     const area = followCursor ? followArea() : null;
     if (area && (r.right <= area.left || r.left >= area.right || r.bottom <= area.top || r.top >= area.bottom)) return false;
     const style = getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return false;
+    if (style.display === 'none' || style.visibility === 'hidden') return false;
+    if (parseFloat(style.opacity) === 0 && !relax?.transparent) return false;
+    if (relax && style.pointerEvents === 'none') return false;
     // Skip elements fully covered by something else (modal, sticky header...). Checked at the
     // visible centre; if the point hits an ancestor/descendant/label of the element it still counts.
     // In follow-cursor mode the "visible" part is the part inside the square.
@@ -156,6 +186,98 @@
       return false;
     }
     return true;
+  }
+
+  // ---------------------------------------------------------------- extra click detectors
+  /** Roots of "clickable looking" regions: cursor is a pointer here but not on the parent (cursor is inherited). */
+  function collectPointerRoots(): Candidate[] {
+    if (extraDirty) {
+      extraDirty = false;
+      const found: HTMLElement[] = [];
+      const all = document.body ? document.body.getElementsByTagName('*') : [];
+      const limit = Math.min(all.length, MAX_POINTER_SCAN_ELEMENTS);
+      for (let i = 0; i < limit; i++) {
+        const el = all[i] as HTMLElement;
+        if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) continue; // only the <svg> itself
+        if (overlay && overlay.contains(el)) continue;
+        const r = el.getBoundingClientRect(); // cheap geometric filter before computed styles
+        if (r.width < 4 || r.height < 4 || r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
+        if (getComputedStyle(el).cursor !== 'pointer') continue;
+        const parent = el.parentElement;
+        if (parent && getComputedStyle(parent).cursor === 'pointer') continue;
+        found.push(el);
+      }
+      pointerCache = found;
+    }
+    return pointerCache.filter((el) => el.isConnected).map((el) => ({ el, extra: true }));
+  }
+
+  /**
+   * Detectors for clickable elements the standard selectors miss. To support another kind of
+   * widget, add an entry here: `collect()` returns candidates (optionally with `relax`); the usual
+   * visibility/covered checks, de-duplication and "innermost wins" rules are applied to them later.
+   */
+  const extraDetectors: ClickDetector[] = [
+    {
+      id: 'aria-widgets',
+      description: 'Elements declaring popup/expand/toggle behaviour through ARIA or data attributes.',
+      collect: () => Array.from(document.querySelectorAll<HTMLElement>(EXTRA_SELECTORS), (el) => ({ el, extra: true })),
+    },
+    {
+      id: 'hidden-controls',
+      description: 'Hamburger-menu pattern: transparent checkboxes/radios laid over a drawn button, and (aria-hidden) labels that toggle a control.',
+      collect: () => {
+        const out: Candidate[] = [];
+        document.querySelectorAll<HTMLElement>('input[type="checkbox"],input[type="radio"]')
+          .forEach((el) => out.push({ el, extra: true, relax: { transparent: true } }));
+        document.querySelectorAll<HTMLElement>('label[for]')
+          .forEach((el) => out.push({ el, extra: true, relax: { ariaHidden: true } }));
+        return out;
+      },
+    },
+    {
+      id: 'page-listeners',
+      description: 'Elements on which the page registered click/mouse/pointer listeners (marked by page-hook.ts).',
+      collect: () => Array.from(document.querySelectorAll<HTMLElement>(`[${PAGE_LISTENER_ATTR}]`), (el) => ({ el, extra: true })),
+    },
+    {
+      id: 'cursor-pointer',
+      description: 'Elements the page styles with a pointer (hand) cursor.',
+      collect: collectPointerRoots,
+    },
+  ];
+
+  /** Standard candidates first, then the detectors' ones. A detector may only add relaxations to a standard one. */
+  function collectCandidates(): Candidate[] {
+    const map = new Map<HTMLElement, Candidate>();
+    document.querySelectorAll<HTMLElement>(SELECTORS).forEach((el) => map.set(el, { el, extra: false }));
+    for (const detector of extraDetectors) {
+      let found: Candidate[] = [];
+      try { found = detector.collect(); } catch { /* a broken detector must never break navigation */ }
+      for (const c of found) {
+        const existing = map.get(c.el);
+        if (!existing) map.set(c.el, c);
+        else if (c.relax) existing.relax = { ...existing.relax, ...c.relax };
+      }
+    }
+    return Array.from(map.values());
+  }
+
+  /** Rules that only apply to extra candidates, to avoid numbering containers and duplicates. */
+  function filterExtras(usable: Candidate[]): Candidate[] {
+    const els = new Set(usable.map((c) => c.el));
+    return usable.filter((c) => {
+      if (!c.extra) return true;
+      const el = c.el;
+      if (el === document.body || el === document.documentElement) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width * r.height > innerWidth * innerHeight * MAX_EXTRA_AREA_FRACTION) return false;
+      // a label whose control is itself numbered would give the same button two numbers
+      if (el instanceof HTMLLabelElement && el.control instanceof HTMLElement && els.has(el.control)) return false;
+      // innermost wins: a container with numbered things inside is not a button itself
+      for (const other of els) if (other !== el && el.contains(other)) return false;
+      return true;
+    });
   }
 
   function nextFreeNumber(): number | null {
@@ -175,11 +297,16 @@
     const root = ensureOverlay();
     if (followCursor) ensureLens();
     const seen = new Set<HTMLElement>();
-    document.querySelectorAll<HTMLElement>(SELECTORS).forEach((el) => {
-      if (el.closest('#number-navigator-overlay') || !isUsable(el)) return;
+    const extraOf = new Map<HTMLElement, boolean>();
+    const usable = filterExtras(collectCandidates().filter((c) =>
+      !c.el.closest('#number-navigator-overlay') && isUsable(c.el, c.relax)));
+    // detectors append out of page order: restore it so that "parents first" holds below
+    usable.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    usable.forEach(({ el, extra }) => {
       // Skip elements nested inside an already numbered one (one number per widget)
       for (const other of seen) if (other.contains(el)) return;
       seen.add(el);
+      extraOf.set(el, extra);
     });
 
     for (const e of Array.from(entries.values())) if (!seen.has(e.element)) removeEntry(e);
@@ -193,7 +320,7 @@
         badge.className = 'number-navigator-badge';
         badge.textContent = String(n);
         root.appendChild(badge);
-        e = { element: el, number: n, badge };
+        e = { element: el, number: n, badge, extra: !!extraOf.get(el) };
         entries.set(el, e);
         byNumber.set(n, e);
       }
@@ -211,6 +338,7 @@
 
   function scheduleRefresh(delay = REFRESH_DEBOUNCE_MS): void {
     if (!active) return;
+    extraDirty = true;
     window.clearTimeout(refreshTimer);
     refreshTimer = window.setTimeout(refresh, delay);
   }
@@ -223,6 +351,7 @@
       observer = new MutationObserver(onViewportChange);
       observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'style', 'hidden', 'disabled', 'aria-hidden'] });
     }
+    extraDirty = true; // also the periodic keep-alive from the controller re-scans
     refresh();
   }
 
@@ -443,6 +572,26 @@
     return !['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'image', 'range', 'color'].includes(t);
   }
 
+  /**
+   * Full pointer sequence at the centre of the element, like a real mouse click: custom widgets often
+   * listen to pointerdown/mousedown (or use event delegation on the hit element), not only to "click".
+   */
+  function pressElement(el: HTMLElement): void {
+    const r = el.getBoundingClientRect();
+    const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1);
+    const y = Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
+    const hit = document.elementFromPoint(x, y);
+    const target = hit && el.contains(hit) ? hit : el;
+    const base = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0 };
+    const pointer = { pointerType: 'mouse', isPrimary: true };
+    target.dispatchEvent(new PointerEvent('pointerdown', { ...base, ...pointer, buttons: 1 }));
+    target.dispatchEvent(new MouseEvent('mousedown', { ...base, buttons: 1 }));
+    try { el.focus({ preventScroll: true }); } catch { /* not focusable */ }
+    target.dispatchEvent(new PointerEvent('pointerup', { ...base, ...pointer, buttons: 0 }));
+    target.dispatchEvent(new MouseEvent('mouseup', { ...base, buttons: 0 }));
+    target.dispatchEvent(new MouseEvent('click', { ...base, buttons: 0 }));
+  }
+
   function clickNumber(n: number): { status: string; message?: string; number?: number } {
     const e = byNumber.get(n);
     if (!e) { toast(`No element numbered ${n}`, true); return { status: 'Error', message: `No element numbered ${n}` }; }
@@ -458,6 +607,9 @@
       el.focus();
       try { (el as HTMLSelectElement).showPicker(); } catch { el.click(); }
       toast(`Opened list ${n}`);
+    } else if (e.extra) {
+      pressElement(el);
+      toast(`Clicked ${n}`);
     } else {
       el.focus({ preventScroll: true });
       el.click();

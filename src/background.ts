@@ -67,6 +67,14 @@ function injectContentScriptIntoExistingTabs() {
     tabs.forEach(tab => {
       if (tab.id && tab.url && (tab.url.startsWith('http://') || tab.url.startsWith('https://'))) {
 
+        // Page-world hook (marks elements with click listeners). Tabs opened before the install only
+        // report listeners registered from now on; the other detectors still work on them.
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['page-hook.js'],
+          world: 'MAIN'
+        }).catch(() => undefined);
+
         chrome.scripting.executeScript({
           target: { tabId: tab.id },
           files: ['content.js']
