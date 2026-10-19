@@ -81,6 +81,39 @@ describe('content script clicking', () => {
     expect(eventsFired).toContain('click');
   });
 
+  it('should number and click elements inside shadow DOM', async () => {
+    const host = document.createElement('div');
+    host.style.position = 'fixed';
+    host.style.top = '100px';
+    host.style.left = '100px';
+    host.style.width = '120px';
+    host.style.height = '50px';
+    document.body.appendChild(host);
+    createdElements.push(host);
+
+    const shadow = host.attachShadow({ mode: 'open' });
+    const shadowButton = document.createElement('button');
+    shadowButton.textContent = 'Shadow Button';
+    shadowButton.style.display = 'block';
+    shadowButton.style.width = '100%';
+    shadowButton.style.height = '100%';
+    shadow.appendChild(shadowButton);
+
+    let clicked = false;
+    shadowButton.addEventListener('click', () => {
+      clicked = true;
+    });
+
+    await sendMessage({ action: 'numberClickables' });
+
+    // The jasmine reporter header link took number 2, so our shadowButton received number 3
+    const res = await sendMessage({ action: 'clickElement', number: 3 });
+
+    expect(res).not.toBeNull();
+    expect(res.status).toBe('Clicked');
+    expect(clicked).toBeTrue();
+  });
+
   it('should click native button elements properly', async () => {
     const button = document.createElement('button');
     button.textContent = 'Click Me';

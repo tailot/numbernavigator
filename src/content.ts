@@ -115,6 +115,60 @@
   let dotEl: HTMLElement | null = null;
   let mouseTracked = false;
 
+  // ---------------------------------------------------------------- shadow dom helpers
+  function getAllRoots(start: ParentNode = document): (Document | ShadowRoot)[] {
+    const roots: (Document | ShadowRoot)[] = [];
+    function walk(node: ParentNode) {
+      if (node instanceof Document || node instanceof ShadowRoot) {
+        roots.push(node);
+      }
+      const children = node.querySelectorAll('*');
+      for (let i = 0; i < children.length; i++) {
+        const el = children[i];
+        if (el.shadowRoot) {
+          walk(el.shadowRoot);
+        }
+      }
+    }
+    walk(start);
+    return roots;
+  }
+
+  function containsComposed(container: Node, node: Node | null): boolean {
+    let current: Node | null = node;
+    while (current) {
+      if (current === container) return true;
+      if (current.parentNode) {
+        current = current.parentNode;
+      } else if (current instanceof ShadowRoot) {
+        current = current.host;
+      } else {
+        current = null;
+      }
+    }
+    return false;
+  }
+
+  function closestComposed(el: Element, selector: string): Element | null {
+    let current: Element | null = el;
+    while (current) {
+      if (current.matches(selector)) return current;
+      const parent: Node | null = current.parentElement || (current.getRootNode() instanceof ShadowRoot ? (current.getRootNode() as ShadowRoot).host : null);
+      current = parent instanceof Element ? parent : null;
+    }
+    return null;
+  }
+
+  function getDeepElementFromPoint(x: number, y: number): Element | null {
+    let el = document.elementFromPoint(x, y);
+    while (el && el.shadowRoot) {
+      const nested = el.shadowRoot.elementFromPoint(x, y);
+      if (!nested || nested === el) break;
+      el = nested;
+    }
+    return el;
+  }
+
   // ---------------------------------------------------------------- overlay / styles
   function ensureOverlay(): HTMLElement {
     if (overlay && overlay.isConnected) return overlay;
@@ -197,8 +251,8 @@
     const cy = area
       ? Math.min(Math.max((Math.max(r.top, area.top) + Math.min(r.bottom, area.bottom)) / 2, 0), innerHeight - 1)
       : Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
-    const top = document.elementFromPoint(cx, cy);
-    if (top && !el.contains(top) && !top.contains(el) && !(top as HTMLElement).closest('label')) {
+    const top = getDeepElementFromPoint(cx, cy);
+    if (top && !containsComposed(el, top) && !containsComposed(top, el) && !closestComposed(top as HTMLElement, 'label')) {
       // Allow when the hit element is itself in the same interactive widget (e.g. icon over button)
       return false;
     }
@@ -211,18 +265,24 @@
     if (extraDirty) {
       extraDirty = false;
       const found: HTMLElement[] = [];
-      const all = document.body ? document.body.getElementsByTagName('*') : [];
-      const limit = Math.min(all.length, MAX_POINTER_SCAN_ELEMENTS);
-      for (let i = 0; i < limit; i++) {
-        const el = all[i] as HTMLElement;
-        if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) continue; // only the <svg> itself
-        if (overlay && overlay.contains(el)) continue;
-        const r = el.getBoundingClientRect(); // cheap geometric filter before computed styles
-        if (r.width < 4 || r.height < 4 || r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
-        if (getComputedStyle(el).cursor !== 'pointer') continue;
-        const parent = el.parentElement;
-        if (parent && getComputedStyle(parent).cursor === 'pointer') continue;
-        found.push(el);
+      const roots = getAllRoots();
+      let scanned = 0;
+      for (const root of roots) {
+        const all = root.querySelectorAll('*');
+        const limit = Math.min(all.length, MAX_POINTER_SCAN_ELEMENTS - scanned);
+        for (let i = 0; i < limit; i++) {
+          scanned++;
+          const el = all[i] as HTMLElement;
+          if (el instanceof SVGElement && !(el instanceof SVGSVGElement)) continue; // only the <svg> itself
+          if (overlay && containsComposed(overlay, el)) continue;
+          const r = el.getBoundingClientRect(); // cheap geometric filter before computed styles
+          if (r.width < 4 || r.height < 4 || r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) continue;
+          if (getComputedStyle(el).cursor !== 'pointer') continue;
+          const parent = el.parentElement || (el.getRootNode() instanceof ShadowRoot ? (el.getRootNode() as ShadowRoot).host : null);
+          if (parent && getComputedStyle(parent).cursor === 'pointer') continue;
+          found.push(el);
+        }
+        if (scanned >= MAX_POINTER_SCAN_ELEMENTS) break;
       }
       pointerCache = found;
     }
@@ -238,24 +298,26 @@
     {
       id: 'aria-widgets',
       description: 'Elements declaring popup/expand/toggle behaviour through ARIA or data attributes.',
-      collect: () => Array.from(document.querySelectorAll<HTMLElement>(EXTRA_SELECTORS), (el) => ({ el, extra: true })),
+      collect: () => getAllRoots().flatMap((root) => Array.from(root.querySelectorAll<HTMLElement>(EXTRA_SELECTORS), (el) => ({ el, extra: true }))),
     },
     {
       id: 'hidden-controls',
       description: 'Hamburger-menu pattern: transparent checkboxes/radios laid over a drawn button, and (aria-hidden) labels that toggle a control.',
       collect: () => {
         const out: Candidate[] = [];
-        document.querySelectorAll<HTMLElement>('input[type="checkbox"],input[type="radio"]')
-          .forEach((el) => out.push({ el, extra: true, relax: { transparent: true } }));
-        document.querySelectorAll<HTMLElement>('label[for]')
-          .forEach((el) => out.push({ el, extra: true, relax: { ariaHidden: true } }));
+        for (const root of getAllRoots()) {
+          root.querySelectorAll<HTMLElement>('input[type="checkbox"],input[type="radio"]')
+            .forEach((el) => out.push({ el, extra: true, relax: { transparent: true } }));
+          root.querySelectorAll<HTMLElement>('label[for]')
+            .forEach((el) => out.push({ el, extra: true, relax: { ariaHidden: true } }));
+        }
         return out;
       },
     },
     {
       id: 'page-listeners',
       description: 'Elements on which the page registered click/mouse/pointer listeners (marked by page-hook.ts).',
-      collect: () => Array.from(document.querySelectorAll<HTMLElement>(`[${PAGE_LISTENER_ATTR}]`), (el) => ({ el, extra: true })),
+      collect: () => getAllRoots().flatMap((root) => Array.from(root.querySelectorAll<HTMLElement>(`[${PAGE_LISTENER_ATTR}]`), (el) => ({ el, extra: true }))),
     },
     {
       id: 'cursor-pointer',
@@ -267,7 +329,9 @@
   /** Standard candidates first, then the detectors' ones. A detector may only add relaxations to a standard one. */
   function collectCandidates(): Candidate[] {
     const map = new Map<HTMLElement, Candidate>();
-    document.querySelectorAll<HTMLElement>(SELECTORS).forEach((el) => map.set(el, { el, extra: false }));
+    for (const root of getAllRoots()) {
+      root.querySelectorAll<HTMLElement>(SELECTORS).forEach((el) => map.set(el, { el, extra: false }));
+    }
     for (const detector of extraDetectors) {
       let found: Candidate[] = [];
       try { found = detector.collect(); } catch { /* a broken detector must never break navigation */ }
@@ -292,7 +356,7 @@
       // a label whose control is itself numbered would give the same button two numbers
       if (el instanceof HTMLLabelElement && el.control instanceof HTMLElement && els.has(el.control)) return false;
       // innermost wins: a container with numbered things inside is not a button itself
-      for (const other of els) if (other !== el && el.contains(other)) return false;
+      for (const other of els) if (other !== el && containsComposed(el, other)) return false;
       return true;
     });
   }
@@ -325,12 +389,26 @@
     const seen = new Set<HTMLElement>();
     const extraOf = new Map<HTMLElement, boolean>();
     const usable = filterExtras(collectCandidates().filter((c) =>
-      !c.el.closest('#number-navigator-overlay') && isUsable(c.el, c.relax)));
+      !closestComposed(c.el, '#number-navigator-overlay') && isUsable(c.el, c.relax)));
     // detectors append out of page order: restore it so that "parents first" holds below
-    usable.sort((a, b) => (a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+    usable.sort((a, b) => {
+      if (a.el === b.el) return 0;
+      const pos = a.el.compareDocumentPosition(b.el);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      if (pos & Node.DOCUMENT_POSITION_DISCONNECTED) {
+        // Elements in different ShadowRoots or disconnected trees
+        const rootA = a.el.getRootNode();
+        const rootB = b.el.getRootNode();
+        if (rootA !== rootB && rootA instanceof ShadowRoot && rootB instanceof ShadowRoot) {
+          return rootA.host.compareDocumentPosition(rootB.host) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+        }
+      }
+      return 0;
+    });
     usable.forEach(({ el, extra }) => {
       // Skip elements nested inside an already numbered one (one number per widget)
-      for (const other of seen) if (other.contains(el)) return;
+      for (const other of seen) if (containsComposed(other, el) && other !== el) return;
       seen.add(el);
       extraOf.set(el, extra);
     });
@@ -699,8 +777,8 @@
     const r = el.getBoundingClientRect();
     const x = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1);
     const y = Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
-    const hit = document.elementFromPoint(x, y);
-    const target = hit && el.contains(hit) ? hit : el;
+    const hit = getDeepElementFromPoint(x, y);
+    const target = hit && containsComposed(el, hit) ? hit : el;
     const base = { bubbles: true, cancelable: true, composed: true, view: window, clientX: x, clientY: y, button: 0 };
     const pointer = { pointerType: 'mouse', isPrimary: true };
     target.dispatchEvent(new PointerEvent('pointerdown', { ...base, ...pointer, buttons: 1 }));
