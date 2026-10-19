@@ -27,6 +27,7 @@
         @else { Starting microphone… }
       }
       @else { Keyboard active }
+      @if (isActive() && numbersHidden()) { <span class="hidden-flag">🔴 Numbers hidden</span> }
     </div>
 
     @if (voiceEnabled()) {
@@ -95,6 +96,19 @@
     }
   </fieldset>
 
+  <fieldset class="methods">
+    <legend>Show / hide numbers</legend>
+    <label class="language">
+      Command number
+      <input #toggleInput type="number" min="2" max="200" step="1" [value]="toggleNumber()"
+             (change)="onToggleNumberChange(toggleInput)" aria-describedby="toggle-hint">
+    </label>
+    @if (toggleNumberError()) {
+      <p class="hint error-text" role="alert">{{ toggleNumberError() }}</p>
+    }
+    <p class="hint" id="toggle-hint">Say or type this number to hide the numbers (and the square, with Follow cursor); say or type it again to show them. While they are hidden the extension keeps listening, only this number works, and a small red dot near the pointer reminds you. Default: 99. No element is ever given this number.</p>
+  </fieldset>
+
   @if (modelStatus()) {
     <div class="box info" role="status">⬇️ {{ modelStatus() }}</div>
   }
@@ -119,6 +133,7 @@
       <tr><td>A number from <b>2</b> up</td><td>Clicks the element with that number (text fields get the cursor)</td></tr>
       <tr><td><b>0</b> (zero)</td><td>Scroll down</td></tr>
       <tr><td><b>1</b> (one)</td><td>Scroll up</td></tr>
+      <tr><td><b>{{ toggleNumber() }}</b> (command number)</td><td>Hides / shows the numbers. While hidden only this number works</td></tr>
     </table>
     <ol>
       <li>Press <b>Start</b> and allow the microphone.</li>

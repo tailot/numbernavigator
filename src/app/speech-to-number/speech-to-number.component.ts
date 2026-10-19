@@ -6,7 +6,7 @@
  */
 import { ChangeDetectionStrategy, Component, HostListener, OnDestroy, OnInit, inject, signal } from '@angular/core';
 import { ActiveEngine, SpeechEngine, SpeechToTextService } from '../services/speech-to-text.service';
-import { parseSpokenNumber } from './parse-number';
+import { MAX_SPOKEN_NUMBER, parseSpokenNumber } from './parse-number';
 import { Subscription } from 'rxjs';
 
 interface LanguageOption { name: string; code: string; }
@@ -21,9 +21,14 @@ const KEYBOARD_STORAGE_KEY = 'numbernavigator.keyboard';
 const KEY_TIMEOUT_STORAGE_KEY = 'numbernavigator.keyTimeout';
 const FOLLOW_STORAGE_KEY = 'numbernavigator.followCursor';
 const FOLLOW_SIZE_STORAGE_KEY = 'numbernavigator.followSize';
+const TOGGLE_NUMBER_STORAGE_KEY = 'numbernavigator.toggleNumber';
 
 const DEFAULT_KEY_TIMEOUT_MS = 1000;
 const DEFAULT_FOLLOW_SIZE_PX = 320;
+/** Show/hide command number: 0 and 1 are scrolling, and only 0-200 can be recognised by voice. */
+const DEFAULT_TOGGLE_NUMBER = 99;
+const MIN_TOGGLE_NUMBER = 2;
+const MAX_TOGGLE_NUMBER = MAX_SPOKEN_NUMBER;
 const REFRESH_INTERVAL_MS = 3000;
 
 @Component({
@@ -67,6 +72,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   /** Follow-cursor mode: numbers only inside a square around the mouse pointer. */
   readonly followCursor = signal(this.initialFlag(FOLLOW_STORAGE_KEY, false));
   readonly followSizePx = signal(this.initialFollowSize());
+  /** Number that hides/shows the numbers (and the square). Reserved: no element receives it. */
+  readonly toggleNumber = signal(this.initialToggleNumber());
+  readonly toggleNumberError = signal<string | null>(null);
+  /** Numbers hidden: the extension keeps listening but only the toggle number works. Reset on Start/Stop. */
+  readonly numbersHidden = signal(false);
 
   readonly isOnline = signal(navigator.onLine);
   readonly selectedLanguage = signal(this.initialLanguage());
@@ -116,6 +126,10 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       chrome.tabs.onUpdated.addListener(this.onTabUpdated);
       chrome.windows?.onFocusChanged.addListener(this.onTabEvent);
     }
+    // The content script reports a show/hide toggle typed on the page
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.addListener(this.onRuntimeMessage);
+    }
   }
 
   ngOnDestroy(): void {
@@ -125,6 +139,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       chrome.tabs.onActivated.removeListener(this.onTabEvent);
       chrome.tabs.onUpdated.removeListener(this.onTabUpdated);
       chrome.windows?.onFocusChanged.removeListener(this.onTabEvent);
+    }
+    if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
+      chrome.runtime.onMessage.removeListener(this.onRuntimeMessage);
     }
     if (this.isListening()) this.speech.stopListening();
     if (this.isActive()) void this.clearNumbersEverywhere();
@@ -157,6 +174,20 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     if (!enabled && !this.voiceEnabled()) return;
     this.keyboardEnabled.set(enabled);
     this.saveFlag(KEYBOARD_STORAGE_KEY, enabled);
+    void this.refreshActiveTab();
+  }
+
+  /** Settings field for the show/hide command number: validated, saved and sent to the page. */
+  onToggleNumberChange(input: HTMLInputElement): void {
+    const value = Number(input.value);
+    if (input.value.trim() === '' || !Number.isInteger(value) || value < MIN_TOGGLE_NUMBER || value > MAX_TOGGLE_NUMBER) {
+      this.toggleNumberError.set(`Enter a whole number from ${MIN_TOGGLE_NUMBER} to ${MAX_TOGGLE_NUMBER} (0 and 1 are used for scrolling).`);
+      input.value = String(this.toggleNumber());
+      return;
+    }
+    this.toggleNumberError.set(null);
+    this.toggleNumber.set(value);
+    try { localStorage.setItem(TOGGLE_NUMBER_STORAGE_KEY, String(value)); } catch { /* ignore */ }
     void this.refreshActiveTab();
   }
 
@@ -216,6 +247,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.feedback.set(null);
     this.lastHeard.set(null);
     this.isActive.set(true);
+    this.numbersHidden.set(false); // every Start begins with the numbers visible
     this.notice.set(null);
     if (this.voiceUsable()) {
       void this.speech.startListening(this.selectedLanguage(), this.engine());
@@ -226,6 +258,7 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
 
   private stop(clearError = true): void {
     this.isActive.set(false);
+    this.numbersHidden.set(false);
     window.clearInterval(this.refreshTimer);
     if (clearError) this.error.set(null);
     if (this.isListening()) this.speech.stopListening();
@@ -242,8 +275,28 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       this.feedback.set({ kind: 'info', text: 'Not a number – say the number shown on the page.' });
       return;
     }
+    if (n === this.toggleNumber()) { this.toggleNumbersHidden(); return; }
+    if (this.numbersHidden()) {
+      // Hidden: numbers (and scrolling) are not available, only the toggle number is
+      this.feedback.set({ kind: 'info', text: `Numbers are hidden – say ${this.toggleNumber()} to show them.` });
+      return;
+    }
     void this.runCommand(n);
   }
+
+  private toggleNumbersHidden(): void {
+    const hidden = !this.numbersHidden();
+    this.numbersHidden.set(hidden);
+    this.feedback.set({ kind: 'ok', text: hidden ? `✓ Numbers hidden – say ${this.toggleNumber()} to show them` : '✓ Numbers shown' });
+    void this.refreshActiveTab();
+  }
+
+  private readonly onRuntimeMessage = (request: any): void => {
+    if (request?.action !== 'numbersHiddenChanged' || !this.isActive()) return;
+    const hidden = !!request.hidden;
+    this.numbersHidden.set(hidden);
+    this.feedback.set({ kind: 'ok', text: hidden ? `✓ Numbers hidden – type ${this.toggleNumber()} to show them` : '✓ Numbers shown' });
+  };
 
   private async runCommand(n: number): Promise<void> {
     const message = n === 0 ? { action: 'scrollDown' } : n === 1 ? { action: 'scrollUp' } : { action: 'clickElement', number: n };
@@ -281,7 +334,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       keyboard: this.keyboardEnabled(),
       keyTimeout: this.keyTimeoutMs(),
       followCursor: this.followCursor(),
-      followSize: this.followSizePx()
+      followSize: this.followSizePx(),
+      toggleNumber: this.toggleNumber(),
+      numbersHidden: this.numbersHidden()
     }).catch(() => undefined);
   }
 
@@ -327,6 +382,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       if (this.keyTimeoutOptions.some((opt) => opt.ms === saved)) return saved;
     } catch { /* ignore */ }
     return DEFAULT_KEY_TIMEOUT_MS;
+  }
+
+  private initialToggleNumber(): number {
+    try {
+      const saved = Number(localStorage.getItem(TOGGLE_NUMBER_STORAGE_KEY));
+      if (Number.isInteger(saved) && saved >= MIN_TOGGLE_NUMBER && saved <= MAX_TOGGLE_NUMBER) return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_TOGGLE_NUMBER;
   }
 
   private initialFollowSize(): number {
