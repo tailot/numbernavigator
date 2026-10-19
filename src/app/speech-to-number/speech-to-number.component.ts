@@ -11,6 +11,7 @@ import { Subscription } from 'rxjs';
 
 interface LanguageOption { name: string; code: string; }
 interface KeyTimeoutOption { ms: number; label: string; }
+interface FollowSizeOption { px: number; label: string; }
 type Feedback = { kind: 'ok' | 'info' | 'error'; text: string };
 
 const LANGUAGE_STORAGE_KEY = 'numbernavigator.language';
@@ -18,8 +19,11 @@ const ENGINE_STORAGE_KEY = 'numbernavigator.engine';
 const VOICE_STORAGE_KEY = 'numbernavigator.voice';
 const KEYBOARD_STORAGE_KEY = 'numbernavigator.keyboard';
 const KEY_TIMEOUT_STORAGE_KEY = 'numbernavigator.keyTimeout';
+const FOLLOW_STORAGE_KEY = 'numbernavigator.followCursor';
+const FOLLOW_SIZE_STORAGE_KEY = 'numbernavigator.followSize';
 
 const DEFAULT_KEY_TIMEOUT_MS = 1000;
+const DEFAULT_FOLLOW_SIZE_PX = 320;
 const REFRESH_INTERVAL_MS = 3000;
 
 @Component({
@@ -49,10 +53,20 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     { ms: 3000, label: '3 s (slow)' },
   ];
 
+  readonly followSizeOptions: FollowSizeOption[] = [
+    { px: 200, label: 'Small (200 px)' },
+    { px: 320, label: 'Medium (320 px, default)' },
+    { px: 480, label: 'Large (480 px)' },
+    { px: 640, label: 'Extra large (640 px)' },
+  ];
+
   readonly isBrowserSupported = this.speech.isBrowserSupported();
   readonly voiceEnabled = signal(this.initialFlag(VOICE_STORAGE_KEY, true));
   readonly keyboardEnabled = signal(this.initialFlag(KEYBOARD_STORAGE_KEY, false));
   readonly keyTimeoutMs = signal(this.initialKeyTimeout());
+  /** Follow-cursor mode: numbers only inside a square around the mouse pointer. */
+  readonly followCursor = signal(this.initialFlag(FOLLOW_STORAGE_KEY, false));
+  readonly followSizePx = signal(this.initialFollowSize());
 
   readonly isOnline = signal(navigator.onLine);
   readonly selectedLanguage = signal(this.initialLanguage());
@@ -144,6 +158,21 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     this.keyboardEnabled.set(enabled);
     this.saveFlag(KEYBOARD_STORAGE_KEY, enabled);
     void this.refreshActiveTab();
+  }
+
+  onFollowCursorToggle(enabled: boolean): void {
+    this.followCursor.set(enabled);
+    this.saveFlag(FOLLOW_STORAGE_KEY, enabled);
+    void this.refreshActiveTab();
+  }
+
+  onFollowSizeChange(value: string | number): void {
+    const px = Number(value);
+    if (this.followSizeOptions.some((opt) => opt.px === px)) {
+      this.followSizePx.set(px);
+      try { localStorage.setItem(FOLLOW_SIZE_STORAGE_KEY, String(px)); } catch { /* ignore */ }
+      void this.refreshActiveTab();
+    }
   }
 
   onKeyTimeoutChange(value: string | number): void {
@@ -250,7 +279,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     chrome.tabs.sendMessage(tab.id!, {
       action: 'numberClickables',
       keyboard: this.keyboardEnabled(),
-      keyTimeout: this.keyTimeoutMs()
+      keyTimeout: this.keyTimeoutMs(),
+      followCursor: this.followCursor(),
+      followSize: this.followSizePx()
     }).catch(() => undefined);
   }
 
@@ -296,6 +327,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       if (this.keyTimeoutOptions.some((opt) => opt.ms === saved)) return saved;
     } catch { /* ignore */ }
     return DEFAULT_KEY_TIMEOUT_MS;
+  }
+
+  private initialFollowSize(): number {
+    try {
+      const saved = Number(localStorage.getItem(FOLLOW_SIZE_STORAGE_KEY));
+      if (this.followSizeOptions.some((opt) => opt.px === saved)) return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_FOLLOW_SIZE_PX;
   }
 
   private ensureAtLeastOneMethod(): void {

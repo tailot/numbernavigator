@@ -14,6 +14,9 @@
  *  - Optional keyboard navigation: digits typed on the page are collected in a buffer and accepted
  *    after a short timeout (or immediately when no longer number could follow), so "1" then "2"
  *    gives 12 while a lone "2" gives 2. Enabled/disabled by the controller (settings).
+ *  - Optional "follow cursor" mode: a hairline empty square is drawn around the mouse pointer and
+ *    numbers exist ONLY for the elements inside that square (the rest of the page is not numbered).
+ *    Everything else (voice/keyboard commands, scrolling, stable numbers, toasts) is unchanged.
  */
 (() => {
   const w = window as any;
@@ -28,6 +31,11 @@
   const MAX_DIGITS = String(LAST_NUMBER).length;
   /** Accept the typed number at once when no other number could continue it (e.g. "5" with only 2..40). */
   const COMMIT_WHEN_UNAMBIGUOUS = true;
+  /** Follow-cursor mode: side of the square (px) and how often numbers are refreshed while the mouse moves. */
+  const DEFAULT_FOLLOW_SIZE_PX = 320;
+  const MIN_FOLLOW_SIZE_PX = 100;
+  const MAX_FOLLOW_SIZE_PX = 1200;
+  const FOLLOW_REFRESH_MS = 90;
 
   const SELECTORS = [
     'a[href]', 'button', 'summary', 'select', 'textarea', '[contenteditable=""]', '[contenteditable="true"]',
@@ -55,6 +63,16 @@
   let keyBuffer = '';
   let keyTimer: number | undefined;
 
+  // follow-cursor mode
+  let followCursor = false;
+  let followSizePx = DEFAULT_FOLLOW_SIZE_PX;
+  let cursorX = 0;
+  let cursorY = 0;
+  let cursorKnown = false; // until the mouse moves, the square is centred in the window
+  let lensEl: HTMLElement | null = null;
+  let followRaf = 0;
+  let followRefreshTimer: number | undefined;
+
   // ---------------------------------------------------------------- overlay / styles
   function ensureOverlay(): HTMLElement {
     if (overlay && overlay.isConnected) return overlay;
@@ -68,6 +86,8 @@
           border:1px solid #111;box-shadow:0 1px 3px rgba(0,0,0,.45);pointer-events:none;box-sizing:border-box;transition:opacity .15s,transform .15s;}
         .number-navigator-badge.match{background:#00e676;color:#000;transform:scale(1.18);z-index:2147483647;}
         .number-navigator-badge.dim{opacity:.35;}
+        .number-navigator-lens{position:fixed;margin:0;padding:0;box-sizing:border-box;background:transparent;pointer-events:none;
+          border:1px solid #111;box-shadow:0 0 0 1px rgba(255,255,255,.75);}
         .number-navigator-flash{position:fixed;border:3px solid #00c853;border-radius:4px;background:rgba(0,200,83,.18);
           pointer-events:none;box-sizing:border-box;transition:opacity .5s ease-out;}
         #number-navigator-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:80vw;padding:8px 16px;
@@ -112,15 +132,24 @@
   // ---------------------------------------------------------------- element detection
   function isUsable(el: HTMLElement): boolean {
     if ((el as HTMLInputElement).disabled || el.getAttribute('aria-hidden') === 'true') return false;
-    const style = getComputedStyle(el);
-    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return false;
     const r = el.getBoundingClientRect();
     if (r.width < 4 || r.height < 4) return false;
     if (r.bottom <= 0 || r.right <= 0 || r.top >= innerHeight || r.left >= innerWidth) return false;
+    // Follow-cursor mode: only elements that overlap the square around the pointer are eligible
+    // (cheap geometric test first, so the page is not scanned in depth while the mouse moves).
+    const area = followCursor ? followArea() : null;
+    if (area && (r.right <= area.left || r.left >= area.right || r.bottom <= area.top || r.top >= area.bottom)) return false;
+    const style = getComputedStyle(el);
+    if (style.display === 'none' || style.visibility === 'hidden' || parseFloat(style.opacity) === 0) return false;
     // Skip elements fully covered by something else (modal, sticky header...). Checked at the
     // visible centre; if the point hits an ancestor/descendant/label of the element it still counts.
-    const cx = Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1);
-    const cy = Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
+    // In follow-cursor mode the "visible" part is the part inside the square.
+    const cx = area
+      ? Math.min(Math.max((Math.max(r.left, area.left) + Math.min(r.right, area.right)) / 2, 0), innerWidth - 1)
+      : Math.min(Math.max(r.left + r.width / 2, 0), innerWidth - 1);
+    const cy = area
+      ? Math.min(Math.max((Math.max(r.top, area.top) + Math.min(r.bottom, area.bottom)) / 2, 0), innerHeight - 1)
+      : Math.min(Math.max(r.top + r.height / 2, 0), innerHeight - 1);
     const top = document.elementFromPoint(cx, cy);
     if (top && !el.contains(top) && !top.contains(el) && !(top as HTMLElement).closest('label')) {
       // Allow when the hit element is itself in the same interactive widget (e.g. icon over button)
@@ -144,6 +173,7 @@
   function refresh(): void {
     if (!active) return;
     const root = ensureOverlay();
+    if (followCursor) ensureLens();
     const seen = new Set<HTMLElement>();
     document.querySelectorAll<HTMLElement>(SELECTORS).forEach((el) => {
       if (el.closest('#number-navigator-overlay') || !isUsable(el)) return;
@@ -168,9 +198,14 @@
         byNumber.set(n, e);
       }
       const r = el.getBoundingClientRect();
-      // Badge sits on the top-left corner, kept inside the viewport
-      e.badge.style.left = Math.max(0, Math.min(r.left - 2, innerWidth - 30)) + 'px';
-      e.badge.style.top = Math.max(0, Math.min(r.top - 2, innerHeight - 20)) + 'px';
+      // Badge sits on the top-left corner, kept inside the viewport (and inside the square when following the cursor)
+      const area = followCursor ? followArea() : null;
+      const minLeft = area ? area.left : 0;
+      const minTop = area ? area.top : 0;
+      const maxLeft = (area ? area.right : innerWidth) - 30;
+      const maxTop = (area ? area.bottom : innerHeight) - 20;
+      e.badge.style.left = Math.max(minLeft, Math.min(r.left - 2, maxLeft)) + 'px';
+      e.badge.style.top = Math.max(minTop, Math.min(r.top - 2, maxTop)) + 'px';
     });
   }
 
@@ -194,6 +229,7 @@
   function deactivate(): void {
     active = false;
     setKeyboard(false);
+    setFollowCursor(false);
     window.removeEventListener('scroll', onViewportChange, true);
     window.removeEventListener('resize', onViewportChange);
     observer?.disconnect();
@@ -206,6 +242,74 @@
   }
 
   function onViewportChange(): void { scheduleRefresh(); }
+
+  // ---------------------------------------------------------------- follow-cursor mode
+  /** Square around the pointer (clipped to the window): the only area that is numbered in this mode. */
+  function followArea(): { left: number; top: number; right: number; bottom: number } {
+    const x = cursorKnown ? cursorX : innerWidth / 2;
+    const y = cursorKnown ? cursorY : innerHeight / 2;
+    const half = followSizePx / 2;
+    return {
+      left: Math.max(0, x - half),
+      top: Math.max(0, y - half),
+      right: Math.min(innerWidth, x + half),
+      bottom: Math.min(innerHeight, y + half),
+    };
+  }
+
+  function positionLens(): void {
+    if (!lensEl) return;
+    const x = cursorKnown ? cursorX : innerWidth / 2;
+    const y = cursorKnown ? cursorY : innerHeight / 2;
+    const half = followSizePx / 2;
+    Object.assign(lensEl.style, { left: x - half + 'px', top: y - half + 'px', width: followSizePx + 'px', height: followSizePx + 'px' });
+  }
+
+  function ensureLens(): void {
+    if (!lensEl || !lensEl.isConnected) {
+      lensEl = document.createElement('div');
+      lensEl.className = 'number-navigator-lens';
+      const root = ensureOverlay();
+      root.insertBefore(lensEl, root.firstChild); // below the badges
+    }
+    positionLens();
+  }
+
+  function onMouseMove(ev: MouseEvent): void {
+    cursorX = ev.clientX;
+    cursorY = ev.clientY;
+    cursorKnown = true;
+    if (followRaf) return;
+    followRaf = window.requestAnimationFrame(() => {
+      followRaf = 0;
+      if (!active || !followCursor) return;
+      positionLens();
+      // Throttled (not debounced): numbers follow the square while the mouse is still moving
+      if (followRefreshTimer === undefined) {
+        followRefreshTimer = window.setTimeout(() => { followRefreshTimer = undefined; refresh(); }, FOLLOW_REFRESH_MS);
+      }
+    });
+  }
+
+  /** Turns the mode on/off and sets the side of the square. The caller refreshes the numbers afterwards. */
+  function setFollowCursor(enabled: boolean, sizePx?: number): void {
+    if (typeof sizePx === 'number' && sizePx >= MIN_FOLLOW_SIZE_PX && sizePx <= MAX_FOLLOW_SIZE_PX) {
+      followSizePx = sizePx;
+    }
+    if (enabled === followCursor) return;
+    followCursor = enabled;
+    if (enabled) {
+      window.addEventListener('mousemove', onMouseMove, { capture: true, passive: true });
+    } else {
+      window.removeEventListener('mousemove', onMouseMove, true);
+      window.cancelAnimationFrame(followRaf);
+      followRaf = 0;
+      window.clearTimeout(followRefreshTimer);
+      followRefreshTimer = undefined;
+      lensEl?.remove();
+      lensEl = null;
+    }
+  }
 
   // ---------------------------------------------------------------- keyboard navigation
   /** True when the focused element uses digit keys itself (typing, list type-ahead, sliders...). */
@@ -391,6 +495,7 @@
   chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
     switch (request.action) {
       case 'numberClickables': // also used as keep-alive / refresh by the controller
+        setFollowCursor(!!request.followCursor, request.followSize); // before activate(): it refreshes the numbers
         activate();
         setKeyboard(!!request.keyboard, request.keyTimeout);
         sendResponse({ status: 'Clickables numbered', count: entries.size });

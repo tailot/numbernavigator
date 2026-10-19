@@ -17,6 +17,7 @@ NumberNavigator is a browser extension designed for hands-free and keyboard-driv
 *   **Stable numbers:** an element keeps its number while it is on screen; numbers refresh automatically after scrolling, resizing or page changes.
 *   **Clear feedback:** a toast on the page confirms every command ("Clicked 12"), and matching badges highlight dynamically as you type digits.
 *   **Multi-language:** English, Spanish, Italian, French, German, Arabic and Japanese. Digits ("21") and words ("twenty-one") are both understood for voice commands. The language is remembered.
+*   **Follow cursor (optional):** turn it on in the control tab and a hairline empty square follows the mouse pointer. Numbers are shown, and available, only for elements inside the square; the rest of the page is not numbered. The square size is selectable. Voice, keyboard, scrolling and all other features work as usual.
 *   **Non-intrusive:** labels are drawn in an overlay; the page's own layout and styles are not modified.
 
 ## How to Use
