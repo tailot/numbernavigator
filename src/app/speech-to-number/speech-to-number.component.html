@@ -74,6 +74,27 @@
     }
   </fieldset>
 
+  <fieldset class="methods">
+    <legend>Follow cursor</legend>
+    <label class="check">
+      <input type="checkbox" [checked]="followCursor()" (change)="onFollowCursorToggle($any($event.target).checked)">
+      🔲 Follow cursor (numbers only around the mouse pointer)
+    </label>
+    @if (followCursor()) {
+      <label class="language">
+        Square size
+        <select [value]="followSizePx()" (change)="onFollowSizeChange($any($event.target).value)">
+          @for (opt of followSizeOptions; track opt.px) {
+            <option [value]="opt.px" [selected]="opt.px === followSizePx()">{{ opt.label }}</option>
+          }
+        </select>
+      </label>
+      <p class="hint">A thin empty square follows the mouse pointer on the page. Only the elements inside it get a number; the rest of the page is not numbered. Move the pointer to change what you can reach. Works with voice and keyboard.</p>
+    } @else {
+      <p class="hint">Off: every visible element of the page is numbered.</p>
+    }
+  </fieldset>
+
   @if (modelStatus()) {
     <div class="box info" role="status">⬇️ {{ modelStatus() }}</div>
   }
@@ -106,7 +127,7 @@
     </ol>
     <details>
       <summary>Good to know</summary>
-      <p>Numbers stay the same while an element is on screen and update after scrolling or page changes. Only what is visible in the window is numbered. The extension adds an overlay to the page but does not change the page itself.</p>
+      <p>Numbers stay the same while an element is on screen and update after scrolling or page changes. Only what is visible in the window is numbered (or, with <b>Follow cursor</b>, only what is inside the square around the pointer). The extension adds an overlay to the page but does not change the page itself.</p>
     </details>
   </section>
 </main>
