@@ -24,14 +24,27 @@ NumberNavigator is a browser extension designed for hands-free and keyboard-driv
 
 ## How to Use
 
-1.  **Install** (same package for both browsers; unzip it first, or use `dist/numbernavigator/browser` after building):
-    *   **Google Chrome:** open `chrome://extensions` -> enable *Developer mode* -> *Load unpacked* -> select the folder.
-    *   **Microsoft Edge:** open `edge://extensions` -> enable *Developer mode* (left sidebar) -> *Load unpacked* -> select the folder.
-2.  Click the toolbar icon: the **control tab** opens. Choose your preferred navigation method (Voice, Keyboard, or Both). Press **Start** (and allow the microphone if Voice is enabled).
-3.  Switch to the website you want to control. **Keep the control tab open** (it can stay in the background).
-4.  Say or type the yellow number next to what you want to click. Say/type **0** to scroll down, **1** to scroll up.
-5.  Say/type **99** (or the command number you set) to hide the numbers temporarily, and again to show them.
-6.  Press **Stop** (in the control tab) to remove the numbers and deactivate navigation.
+### Installation
+
+#### Option 1: Download Ready-to-Use Release (Recommended)
+
+1. Go to the **Releases** section on GitHub and download the latest `numbernavigator.zip` file.
+2. Extract (unzip) `numbernavigator.zip` into a folder on your computer.
+3. Load the unpacked extension in your browser:
+    * **Google Chrome:** open `chrome://extensions` -> enable **Developer mode** (top-right toggle) -> click **Load unpacked** -> select the extracted folder.
+    * **Microsoft Edge:** open `edge://extensions` -> enable **Developer mode** (left sidebar toggle) -> click **Load unpacked** -> select the extracted folder.
+
+#### Option 2: Build from Source
+
+If you prefer to build the extension from source, follow the steps in [Building from Source](#building-from-source) and select the `dist/numbernavigator/browser` folder when loading the unpacked extension.
+
+### Getting Started
+
+1. Click the toolbar icon: the **control tab** opens. Choose your preferred navigation method (Voice, Keyboard, or Both). Press **Start** (and allow the microphone if Voice is enabled).
+2. Switch to the website you want to control. **Keep the control tab open** (it can stay in the background).
+3. Say or type the yellow number next to what you want to click. Say/type **0** to scroll down, **1** to scroll up.
+4. Say/type **99** (or the command number you set) to hide the numbers temporarily, and again to show them.
+5. Press **Stop** (in the control tab) to remove the numbers and deactivate navigation.
 
 **Notes**
 
