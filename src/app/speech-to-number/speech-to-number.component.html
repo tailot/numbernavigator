@@ -1,167 +1,335 @@
-<main>
-  <header>
-    <h1>Number Navigator</h1>
-    <p class="subtitle">{{ i18n.t('subtitle') }}</p>
+<main class="app-container">
+  <header class="app-header">
+    <div class="brand">
+      <div class="logo-icon">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="5" ry="5"></rect>
+          <path d="M9 8h6M12 8v8M9 16h6"></path>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1>Number Navigator</h1>
+        <p class="subtitle">{{ i18n.t('subtitle') }}</p>
+      </div>
+    </div>
   </header>
 
   @if (error()) {
-    <div class="box error" role="alert">⚠️ {{ error() }}</div>
+    <div class="alert-box error" role="alert">
+      <span class="alert-icon">⚠️</span>
+      <span class="alert-msg">{{ error() }}</span>
+    </div>
   }
   @if (!isOnline() && voiceEnabled()) {
-    <div class="box error" role="alert">{{ i18n.t('noInternet') }}</div>
+    <div class="alert-box warning" role="alert">
+      <span class="alert-icon">🌐</span>
+      <span class="alert-msg">{{ i18n.t('noInternet') }}</span>
+    </div>
   }
 
-  <section class="controls" aria-label="Controls">
-    <button type="button" class="main-button" [class.stop]="isActive()"
-            [attr.aria-pressed]="isActive()"
-            [disabled]="!isActive() && !canStart()"
-            (click)="toggle()">
-      {{ isActive() ? i18n.t('stopBtn') : i18n.t('startBtn') }}
-    </button>
+  <!-- Hero Control Card -->
+  <section class="hero-card" aria-label="Controls">
+    <div class="hero-top">
+      <button type="button" class="btn-main" [class.stop]="isActive()"
+              [attr.aria-pressed]="isActive()"
+              [disabled]="!isActive() && !canStart()"
+              (click)="toggle()">
+        <span class="btn-icon">
+          @if (isActive()) {
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2"></rect>
+            </svg>
+          } @else {
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+              <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"></path>
+              <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"></path>
+            </svg>
+          }
+        </span>
+        <span class="btn-label">{{ isActive() ? i18n.t('stopBtn') : i18n.t('startBtn') }}</span>
+      </button>
 
-    <div class="status" role="status" aria-live="polite">
-      <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
-      @if (!isActive()) { {{ i18n.t('statusStopped') }} }
-      @else if (voiceEnabled()) {
-        @if (isListening()) { {{ i18n.t('statusListening') }} <span class="engine">({{ activeEngine() === 'local' ? i18n.t('engineLocal') : i18n.t('engineOnline') }})</span> }
-        @else { {{ i18n.t('statusStartingMicrophone') }} }
-      }
-      @else { {{ i18n.t('statusKeyboardActive') }} }
-      @if (isActive() && numbersHidden()) { <span class="hidden-flag">{{ i18n.t('statusNumbersHidden') }}</span> }
+      <div class="status-panel" role="status" aria-live="polite">
+        <div class="status-badge" [class.active]="isActive()">
+          <span class="dot" [class.on]="isActive() && isListening()" [class.wait]="isActive() && !isListening()"></span>
+          <span class="status-text">
+            @if (!isActive()) { {{ i18n.t('statusStopped') }} }
+            @else if (voiceEnabled()) {
+              @if (isListening()) {
+                {{ i18n.t('statusListening') }}
+                <span class="engine-badge">{{ activeEngine() === 'local' ? i18n.t('engineLocal') : i18n.t('engineOnline') }}</span>
+              }
+              @else { {{ i18n.t('statusStartingMicrophone') }} }
+            }
+            @else { {{ i18n.t('statusKeyboardActive') }} }
+          </span>
+        </div>
+        @if (isActive() && numbersHidden()) {
+          <span class="hidden-flag-badge">🔴 {{ i18n.t('statusNumbersHidden') }}</span>
+        }
+      </div>
     </div>
 
     @if (voiceEnabled()) {
-      <label class="language">
-        {{ i18n.t('engineLabel') }}
-        <select [value]="engine()" (change)="onEngineChange($any($event.target).value)">
-          <option value="auto" [selected]="engine() === 'auto'">{{ i18n.t('engineAuto') }}</option>
-          <option value="cloud" [selected]="engine() === 'cloud'">{{ i18n.t('engineCloud') }}</option>
-          <option value="local" [selected]="engine() === 'local'">{{ i18n.t('engineLocalOpt') }}</option>
-        </select>
-      </label>
+      <div class="selectors-row">
+        <div class="form-group">
+          <label class="form-label" for="engine-select">{{ i18n.t('engineLabel') }}</label>
+          <div class="select-wrapper">
+            <select id="engine-select" [value]="engine()" (change)="onEngineChange($any($event.target).value)">
+              <option value="auto" [selected]="engine() === 'auto'">{{ i18n.t('engineAuto') }}</option>
+              <option value="cloud" [selected]="engine() === 'cloud'">{{ i18n.t('engineCloud') }}</option>
+              <option value="local" [selected]="engine() === 'local'">{{ i18n.t('engineLocalOpt') }}</option>
+            </select>
+          </div>
+        </div>
 
-      <label class="language">
-        {{ i18n.t('languageLabel') }}
-        <select [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
-          @for (lang of languages; track lang.code) {
-            <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
-          }
-        </select>
-      </label>
+        <div class="form-group">
+          <label class="form-label" for="language-select">{{ i18n.t('languageLabel') }}</label>
+          <div class="select-wrapper">
+            <select id="language-select" [value]="selectedLanguage()" (change)="onLanguageChange($any($event.target).value)">
+              @for (lang of languages; track lang.code) {
+                <option [value]="lang.code" [selected]="lang.code === selectedLanguage()">{{ lang.name }}</option>
+              }
+            </select>
+          </div>
+        </div>
+      </div>
     }
   </section>
 
-  <fieldset class="methods">
-    <legend>{{ i18n.t('navMethodLegend') }}</legend>
-    <label class="check">
-      <input type="checkbox" [checked]="voiceEnabled()" [disabled]="voiceEnabled() && !keyboardEnabled()" (change)="onVoiceToggle($any($event.target).checked)">
-      {{ i18n.t('voiceCheckbox') }}
-    </label>
-    <label class="check">
-      <input type="checkbox" [checked]="keyboardEnabled()" [disabled]="keyboardEnabled() && !voiceEnabled()" (change)="onKeyboardToggle($any($event.target).checked)">
-      {{ i18n.t('keyboardCheckbox') }}
-    </label>
-    <p class="hint">{{ i18n.t('navMethodHint') }}</p>
-    @if (keyboardEnabled()) {
-      <label class="language">
-        {{ i18n.t('keyTimeoutLabel') }}
-        <select [value]="keyTimeoutMs()" (change)="onKeyTimeoutChange($any($event.target).value)">
-          @for (opt of keyTimeoutOptions; track opt.ms) {
-            <option [value]="opt.ms" [selected]="opt.ms === keyTimeoutMs()">{{ i18n.t(opt.labelKey) }}</option>
-          }
-        </select>
-      </label>
-      <p class="hint">{{ i18n.t('keyTimeoutHint') }}</p>
-    }
-  </fieldset>
+  <!-- Navigation Methods Card -->
+  <section class="card">
+    <div class="card-header">
+      <span class="card-icon">⚡</span>
+      <h2>{{ i18n.t('navMethodLegend') }}</h2>
+    </div>
 
-  <fieldset class="methods">
-    <legend>{{ i18n.t('followCursorLegend') }}</legend>
-    <label class="check">
-      <input type="checkbox" [checked]="followCursor()" (change)="onFollowCursorToggle($any($event.target).checked)">
-      {{ i18n.t('followCursorCheckbox') }}
-    </label>
-    @if (followCursor()) {
-      <label class="language">
-        {{ i18n.t('squareSizeLabel') }}
-        <select [value]="followSizePx()" (change)="onFollowSizeChange($any($event.target).value)">
-          @for (opt of followSizeOptions; track opt.px) {
-            <option [value]="opt.px" [selected]="opt.px === followSizePx()">{{ i18n.t(opt.labelKey) }}</option>
-          }
-        </select>
-      </label>
-      <p class="hint">{{ i18n.t('followCursorHintOn') }}</p>
-    } @else {
-      <p class="hint">{{ i18n.t('followCursorHintOff') }}</p>
-    }
-  </fieldset>
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="switch-label">
+          <span class="toggle-text">{{ i18n.t('voiceCheckbox') }}</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="voiceEnabled()" [disabled]="voiceEnabled() && !keyboardEnabled()" (change)="onVoiceToggle($any($event.target).checked)">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
 
-  <fieldset class="methods">
-    <legend>{{ i18n.t('timedClickLegend') }}</legend>
-    <label class="check">
-      <input type="checkbox" [checked]="timedClickEnabled()" (change)="onTimedClickToggle($any($event.target).checked)">
-      {{ i18n.t('timedClickCheckbox') }}
-    </label>
-    @if (timedClickEnabled()) {
-      <label class="language">
-        {{ i18n.t('timedClickIntervalLabel') }}
-        <select [value]="timedClickIntervalSec()" (change)="onTimedClickIntervalChange($any($event.target).value)">
-          @for (opt of timedClickOptions; track opt.sec) {
-            <option [value]="opt.sec" [selected]="opt.sec === timedClickIntervalSec()">{{ i18n.t(opt.labelKey) }}</option>
-          }
-        </select>
-      </label>
-    }
-    <p class="hint">{{ i18n.t('timedClickHint') }}</p>
-  </fieldset>
+      <div class="toggle-row">
+        <label class="switch-label">
+          <span class="toggle-text">{{ i18n.t('keyboardCheckbox') }}</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="keyboardEnabled()" [disabled]="keyboardEnabled() && !voiceEnabled()" (change)="onKeyboardToggle($any($event.target).checked)">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
 
-  <fieldset class="methods">
-    <legend>{{ i18n.t('commandNumberLegend') }}</legend>
-    <label class="language">
-      {{ i18n.t('commandNumberLabel') }}
-      <input #toggleInput type="number" min="2" max="200" step="1" [value]="toggleNumber()"
-             (change)="onToggleNumberChange(toggleInput)" aria-describedby="toggle-hint">
-    </label>
-    @if (toggleNumberError()) {
-      <p class="hint error-text" role="alert">{{ toggleNumberError() }}</p>
-    }
-    <p class="hint" id="toggle-hint">{{ i18n.t('commandNumberHint') }}</p>
-  </fieldset>
+      <p class="hint">{{ i18n.t('navMethodHint') }}</p>
+
+      @if (keyboardEnabled()) {
+        <div class="sub-option">
+          <div class="form-group">
+            <label class="form-label" for="key-timeout-select">{{ i18n.t('keyTimeoutLabel') }}</label>
+            <div class="select-wrapper">
+              <select id="key-timeout-select" [value]="keyTimeoutMs()" (change)="onKeyTimeoutChange($any($event.target).value)">
+                @for (opt of keyTimeoutOptions; track opt.ms) {
+                  <option [value]="opt.ms" [selected]="opt.ms === keyTimeoutMs()">{{ i18n.t(opt.labelKey) }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <p class="hint">{{ i18n.t('keyTimeoutHint') }}</p>
+        </div>
+      }
+    </div>
+  </section>
+
+  <!-- Follow Cursor Card -->
+  <section class="card">
+    <div class="card-header">
+      <span class="card-icon">🔲</span>
+      <h2>{{ i18n.t('followCursorLegend') }}</h2>
+    </div>
+
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="switch-label">
+          <span class="toggle-text">{{ i18n.t('followCursorCheckbox') }}</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="followCursor()" (change)="onFollowCursorToggle($any($event.target).checked)">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+
+      @if (followCursor()) {
+        <div class="sub-option">
+          <div class="form-group">
+            <label class="form-label" for="follow-size-select">{{ i18n.t('squareSizeLabel') }}</label>
+            <div class="select-wrapper">
+              <select id="follow-size-select" [value]="followSizePx()" (change)="onFollowSizeChange($any($event.target).value)">
+                @for (opt of followSizeOptions; track opt.px) {
+                  <option [value]="opt.px" [selected]="opt.px === followSizePx()">{{ i18n.t(opt.labelKey) }}</option>
+                }
+              </select>
+            </div>
+          </div>
+          <p class="hint">{{ i18n.t('followCursorHintOn') }}</p>
+        </div>
+      } @else {
+        <p class="hint">{{ i18n.t('followCursorHintOff') }}</p>
+      }
+    </div>
+  </section>
+
+  <!-- Timed Click Card -->
+  <section class="card">
+    <div class="card-header">
+      <span class="card-icon">⏱️</span>
+      <h2>{{ i18n.t('timedClickLegend') }}</h2>
+    </div>
+
+    <div class="card-body">
+      <div class="toggle-row">
+        <label class="switch-label">
+          <span class="toggle-text">{{ i18n.t('timedClickCheckbox') }}</span>
+          <span class="switch">
+            <input type="checkbox" [checked]="timedClickEnabled()" (change)="onTimedClickToggle($any($event.target).checked)">
+            <span class="slider"></span>
+          </span>
+        </label>
+      </div>
+
+      @if (timedClickEnabled()) {
+        <div class="sub-option">
+          <div class="form-group">
+            <label class="form-label" for="timed-click-select">{{ i18n.t('timedClickIntervalLabel') }}</label>
+            <div class="select-wrapper">
+              <select id="timed-click-select" [value]="timedClickIntervalSec()" (change)="onTimedClickIntervalChange($any($event.target).value)">
+                @for (opt of timedClickOptions; track opt.sec) {
+                  <option [value]="opt.sec" [selected]="opt.sec === timedClickIntervalSec()">{{ i18n.t(opt.labelKey) }}</option>
+                }
+              </select>
+            </div>
+          </div>
+        </div>
+      }
+      <p class="hint">{{ i18n.t('timedClickHint') }}</p>
+    </div>
+  </section>
+
+  <!-- Command Number Card -->
+  <section class="card">
+    <div class="card-header">
+      <span class="card-icon">👁️</span>
+      <h2>{{ i18n.t('commandNumberLegend') }}</h2>
+    </div>
+
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="toggle-input">{{ i18n.t('commandNumberLabel') }}</label>
+        <input id="toggle-input" #toggleInput type="number" min="2" max="200" step="1" [value]="toggleNumber()"
+               (change)="onToggleNumberChange(toggleInput)" aria-describedby="toggle-hint" class="modern-input">
+      </div>
+      @if (toggleNumberError()) {
+        <p class="hint error-text" role="alert">{{ toggleNumberError() }}</p>
+      }
+      <p class="hint" id="toggle-hint">{{ i18n.t('commandNumberHint') }}</p>
+    </div>
+  </section>
 
   @if (modelStatus()) {
-    <div class="box info" role="status">⬇️ {{ modelStatus() }}</div>
+    <div class="alert-box info" role="status">
+      <span class="alert-icon">⬇️</span>
+      <span class="alert-msg">{{ modelStatus() }}</span>
+    </div>
   }
   @if (notice()) {
-    <div class="box info" role="status">ℹ️ {{ notice() }}</div>
+    <div class="alert-box info" role="status">
+      <span class="alert-icon">ℹ️</span>
+      <span class="alert-msg">{{ notice() }}</span>
+    </div>
   }
 
   @if (isActive()) {
     @if (!hasTargetTab()) {
-      <div class="box info">{{ i18n.t('switchTabNotice') }}</div>
+      <div class="alert-box info">
+        <span class="alert-icon">👉</span>
+        <span class="alert-msg">{{ i18n.t('switchTabNotice') }}</span>
+      </div>
     }
-    <section class="feedback" aria-live="polite">
-      @if (lastHeard()) { <div class="heard">{{ i18n.t('heardText', { text: lastHeard()! }) }}</div> }
-      @if (feedback(); as f) { <div class="result" [class]="'result ' + f.kind">{{ f.text }}</div> }
+    <section class="feedback-card" aria-live="polite">
+      @if (lastHeard()) {
+        <div class="heard"><span class="heard-label">🎙️</span> {{ i18n.t('heardText', { text: lastHeard()! }) }}</div>
+      }
+      @if (feedback(); as f) {
+        <div class="result" [class]="'result ' + f.kind">{{ f.text }}</div>
+      }
     </section>
   }
 
-  <section class="help">
-    <h2>{{ i18n.t('commandsHeading') }}</h2>
-    <table>
-      <tr><th>{{ i18n.t('thSayOrType') }}</th><th>{{ i18n.t('thEffect') }}</th></tr>
-      <tr><td>{{ i18n.t('cmdNumber', { min: 2 }) }}</td><td>{{ i18n.t('cmdNumberEffect') }}</td></tr>
-      <tr><td><b>{{ i18n.t('cmdZero') }}</b></td><td>{{ i18n.t('cmdZeroEffect') }}</td></tr>
-      <tr><td><b>{{ i18n.t('cmdOne') }}</b></td><td>{{ i18n.t('cmdOneEffect') }}</td></tr>
-      <tr><td><b>{{ i18n.t('cmdToggleNumber', { num: toggleNumber() }) }}</b></td><td>{{ i18n.t('cmdToggleEffect') }}</td></tr>
-    </table>
-    <ol>
-      <li>{{ i18n.t('step1') }}</li>
-      <li>{{ i18n.t('step2') }}</li>
-      <li>{{ i18n.t('step3') }}</li>
-    </ol>
-    <details>
-      <summary>{{ i18n.t('goodToKnowSummary') }}</summary>
-      <p>{{ i18n.t('goodToKnowDetails') }}</p>
-    </details>
+  <!-- Help & Commands Reference Card -->
+  <section class="card help-card">
+    <div class="card-header">
+      <span class="card-icon">📖</span>
+      <h2>{{ i18n.t('commandsHeading') }}</h2>
+    </div>
+
+    <div class="card-body">
+      <div class="table-wrapper">
+        <table class="cmd-table">
+          <thead>
+            <tr>
+              <th>{{ i18n.t('thSayOrType') }}</th>
+              <th>{{ i18n.t('thEffect') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><kbd class="cmd-badge">{{ i18n.t('cmdNumber', { min: 2 }) }}</kbd></td>
+              <td>{{ i18n.t('cmdNumberEffect') }}</td>
+            </tr>
+            <tr>
+              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdZero') }}</kbd></td>
+              <td>{{ i18n.t('cmdZeroEffect') }}</td>
+            </tr>
+            <tr>
+              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdOne') }}</kbd></td>
+              <td>{{ i18n.t('cmdOneEffect') }}</td>
+            </tr>
+            <tr>
+              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdToggleNumber', { num: toggleNumber() }) }}</kbd></td>
+              <td>{{ i18n.t('cmdToggleEffect') }}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="steps-list">
+        <div class="step-item">
+          <span class="step-number">1</span>
+          <span>{{ i18n.t('step1') }}</span>
+        </div>
+        <div class="step-item">
+          <span class="step-number">2</span>
+          <span>{{ i18n.t('step2') }}</span>
+        </div>
+        <div class="step-item">
+          <span class="step-number">3</span>
+          <span>{{ i18n.t('step3') }}</span>
+        </div>
+      </div>
+
+      <details class="accordion">
+        <summary class="accordion-header">
+          <span>{{ i18n.t('goodToKnowSummary') }}</span>
+          <svg class="chevron" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+        </summary>
+        <div class="accordion-body">
+          <p>{{ i18n.t('goodToKnowDetails') }}</p>
+        </div>
+      </details>
+    </div>
   </section>
 </main>
