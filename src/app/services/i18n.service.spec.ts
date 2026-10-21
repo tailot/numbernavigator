@@ -52,4 +52,35 @@ describe('I18nService', () => {
     expect(service.currentLanguage()).toBe('zh');
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe('zh');
   });
+
+  it('should have all translation keys present in every supported language', () => {
+    const supportedCodes = service.supportedLanguages.map((lang) => lang.code);
+    const primaryLangKeys = [
+      'subtitle', 'noInternet', 'speechNotSupported', 'startBtn', 'stopBtn',
+      'statusStopped', 'statusListening', 'statusStartingMicrophone', 'statusKeyboardActive',
+      'statusNumbersHidden', 'engineLocal', 'engineOnline', 'engineLabel', 'engineAuto',
+      'engineCloud', 'engineLocalOpt', 'languageLabel', 'navMethodLegend', 'voiceCheckbox',
+      'keyboardCheckbox', 'navMethodHint', 'keyTimeoutLabel', 'keyTimeoutHint', 'timeoutFast',
+      'timeoutDefault', 'timeout1_5', 'timeout2', 'timeoutSlow', 'followCursorLegend',
+      'followCursorCheckbox', 'squareSizeLabel', 'squareSmall', 'squareMedium', 'squareLarge',
+      'squareExtraLarge', 'followCursorHintOn', 'followCursorHintOff', 'timedClickLegend',
+      'timedClickCheckbox', 'timedClickIntervalLabel', 'timedClick1s', 'timedClick2s',
+      'timedClick3s', 'timedClick5s', 'timedClick10s', 'timedClickHint', 'commandNumberLegend',
+      'commandNumberLabel', 'toggleNumberError', 'commandNumberHint', 'switchTabNotice',
+      'heardText', 'notANumber', 'numbersHiddenNotice', 'numbersHiddenSuccess',
+      'numbersHiddenSuccessKeyboard', 'numbersShownSuccess', 'scrolledDownSuccess',
+      'scrolledUpSuccess', 'clickedSuccess', 'openWebsiteError', 'pageNoResponseError',
+      'commandsHeading', 'thSayOrType', 'thEffect', 'cmdNumber', 'cmdNumberEffect',
+      'cmdZero', 'cmdZeroEffect', 'cmdOne', 'cmdOneEffect', 'cmdToggleNumber',
+      'cmdToggleEffect', 'step1', 'step2', 'step3', 'goodToKnowSummary', 'goodToKnowDetails'
+    ];
+
+    for (const code of supportedCodes) {
+      service.setLanguage(code);
+      for (const key of primaryLangKeys) {
+        const translation = service.t(key);
+        expect(translation).withContext(`Language '${code}' missing key '${key}'`).not.toBe(key);
+      }
+    }
+  });
 });
