@@ -77,6 +77,18 @@ describe('SpeechToNumberComponent', () => {
     expect(localStorage.getItem('numbernavigator.keyTimeout')).toBe('1500');
   });
 
+  it('should toggle timed click and update interval correctly', () => {
+    expect(component.timedClickEnabled()).toBeFalse();
+
+    component.onTimedClickToggle(true);
+    expect(component.timedClickEnabled()).toBeTrue();
+    expect(localStorage.getItem('numbernavigator.timedClick')).toBe('1');
+
+    component.onTimedClickIntervalChange(5);
+    expect(component.timedClickIntervalSec()).toBe(5);
+    expect(localStorage.getItem('numbernavigator.timedClickInterval')).toBe('5');
+  });
+
   it('should allow starting when keyboard is enabled even if offline or voice disabled', () => {
     component.onKeyboardToggle(true);
     component.onVoiceToggle(false);

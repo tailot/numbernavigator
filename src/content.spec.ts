@@ -105,4 +105,44 @@ describe('content script clicking', () => {
     expect(res.status).toBe('Clicked');
     expect(clicked).toBeTrue();
   });
+
+  it('should trigger timed click after hover duration when timed click is enabled', (done) => {
+    jasmine.clock().install();
+
+    const link = document.createElement('a');
+    link.href = '#test';
+    link.textContent = 'Hover Me Link';
+    link.style.position = 'fixed';
+    link.style.top = '20px';
+    link.style.left = '20px';
+    link.style.width = '100px';
+    link.style.height = '40px';
+    link.style.display = 'block';
+
+    document.body.appendChild(link);
+    createdElements.push(link);
+
+    let clicked = false;
+    link.addEventListener('click', (e) => { e.preventDefault(); clicked = true; });
+
+    sendMessage({ action: 'numberClickables', timedClick: true, timedClickInterval: 1 }).then(() => {
+      const mouseMoveEv = new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 25,
+        clientY: 25,
+      });
+      Object.defineProperty(mouseMoveEv, 'target', { value: link });
+
+      window.dispatchEvent(mouseMoveEv);
+
+      expect(clicked).toBeFalse();
+
+      jasmine.clock().tick(1050);
+
+      expect(clicked).toBeTrue();
+      jasmine.clock().uninstall();
+      done();
+    });
+  });
 });

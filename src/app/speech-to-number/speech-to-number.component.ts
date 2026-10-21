@@ -12,6 +12,7 @@ import { Subscription } from 'rxjs';
 
 interface KeyTimeoutOption { ms: number; labelKey: string; }
 interface FollowSizeOption { px: number; labelKey: string; }
+interface TimedClickOption { sec: number; labelKey: string; }
 type Feedback = { kind: 'ok' | 'info' | 'error'; text: string };
 
 const ENGINE_STORAGE_KEY = 'numbernavigator.engine';
@@ -21,9 +22,12 @@ const KEY_TIMEOUT_STORAGE_KEY = 'numbernavigator.keyTimeout';
 const FOLLOW_STORAGE_KEY = 'numbernavigator.followCursor';
 const FOLLOW_SIZE_STORAGE_KEY = 'numbernavigator.followSize';
 const TOGGLE_NUMBER_STORAGE_KEY = 'numbernavigator.toggleNumber';
+const TIMED_CLICK_STORAGE_KEY = 'numbernavigator.timedClick';
+const TIMED_CLICK_INTERVAL_STORAGE_KEY = 'numbernavigator.timedClickInterval';
 
 const DEFAULT_KEY_TIMEOUT_MS = 1000;
 const DEFAULT_FOLLOW_SIZE_PX = 320;
+const DEFAULT_TIMED_CLICK_INTERVAL_SEC = 2;
 /** Show/hide command number: 0 and 1 are scrolling, and only 0-200 can be recognised by voice. */
 const DEFAULT_TOGGLE_NUMBER = 99;
 const MIN_TOGGLE_NUMBER = 2;
@@ -57,6 +61,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     { px: 640, labelKey: 'squareExtraLarge' },
   ];
 
+  readonly timedClickOptions: TimedClickOption[] = [
+    { sec: 1, labelKey: 'timedClick1s' },
+    { sec: 2, labelKey: 'timedClick2s' },
+    { sec: 3, labelKey: 'timedClick3s' },
+    { sec: 5, labelKey: 'timedClick5s' },
+    { sec: 10, labelKey: 'timedClick10s' },
+  ];
+
   readonly isBrowserSupported = this.speech.isBrowserSupported();
   readonly voiceEnabled = signal(this.initialFlag(VOICE_STORAGE_KEY, true));
   readonly keyboardEnabled = signal(this.initialFlag(KEYBOARD_STORAGE_KEY, false));
@@ -64,6 +76,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   /** Follow-cursor mode: numbers only inside a square around the mouse pointer. */
   readonly followCursor = signal(this.initialFlag(FOLLOW_STORAGE_KEY, false));
   readonly followSizePx = signal(this.initialFollowSize());
+  /** Timed click mode: automatically click links after hovering. */
+  readonly timedClickEnabled = signal(this.initialFlag(TIMED_CLICK_STORAGE_KEY, false));
+  readonly timedClickIntervalSec = signal(this.initialTimedClickInterval());
   /** Number that hides/shows the numbers (and the square). Reserved: no element receives it. */
   readonly toggleNumber = signal(this.initialToggleNumber());
   readonly toggleNumberError = signal<string | null>(null);
@@ -194,6 +209,21 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     if (this.followSizeOptions.some((opt) => opt.px === px)) {
       this.followSizePx.set(px);
       try { localStorage.setItem(FOLLOW_SIZE_STORAGE_KEY, String(px)); } catch { /* ignore */ }
+      void this.refreshActiveTab();
+    }
+  }
+
+  onTimedClickToggle(enabled: boolean): void {
+    this.timedClickEnabled.set(enabled);
+    this.saveFlag(TIMED_CLICK_STORAGE_KEY, enabled);
+    void this.refreshActiveTab();
+  }
+
+  onTimedClickIntervalChange(value: string | number): void {
+    const sec = Number(value);
+    if (this.timedClickOptions.some((opt) => opt.sec === sec)) {
+      this.timedClickIntervalSec.set(sec);
+      try { localStorage.setItem(TIMED_CLICK_INTERVAL_STORAGE_KEY, String(sec)); } catch { /* ignore */ }
       void this.refreshActiveTab();
     }
   }
@@ -334,7 +364,9 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       followCursor: this.followCursor(),
       followSize: this.followSizePx(),
       toggleNumber: this.toggleNumber(),
-      numbersHidden: this.numbersHidden()
+      numbersHidden: this.numbersHidden(),
+      timedClick: this.timedClickEnabled(),
+      timedClickInterval: this.timedClickIntervalSec()
     }).catch(() => undefined);
   }
 
@@ -396,6 +428,14 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       if (this.followSizeOptions.some((opt) => opt.px === saved)) return saved;
     } catch { /* ignore */ }
     return DEFAULT_FOLLOW_SIZE_PX;
+  }
+
+  private initialTimedClickInterval(): number {
+    try {
+      const saved = Number(localStorage.getItem(TIMED_CLICK_INTERVAL_STORAGE_KEY));
+      if (this.timedClickOptions.some((opt) => opt.sec === saved)) return saved;
+    } catch { /* ignore */ }
+    return DEFAULT_TIMED_CLICK_INTERVAL_SEC;
   }
 
   private ensureAtLeastOneMethod(): void {
