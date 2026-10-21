@@ -21,6 +21,8 @@ const KEYBOARD_STORAGE_KEY = 'numbernavigator.keyboard';
 const KEY_TIMEOUT_STORAGE_KEY = 'numbernavigator.keyTimeout';
 const FOLLOW_STORAGE_KEY = 'numbernavigator.followCursor';
 const FOLLOW_SIZE_STORAGE_KEY = 'numbernavigator.followSize';
+const SCROLL_DOWN_STORAGE_KEY = 'numbernavigator.scrollDownNumber';
+const SCROLL_UP_STORAGE_KEY = 'numbernavigator.scrollUpNumber';
 const TOGGLE_NUMBER_STORAGE_KEY = 'numbernavigator.toggleNumber';
 const TIMED_CLICK_STORAGE_KEY = 'numbernavigator.timedClick';
 const TIMED_CLICK_INTERVAL_STORAGE_KEY = 'numbernavigator.timedClickInterval';
@@ -28,11 +30,14 @@ const TIMED_CLICK_INTERVAL_STORAGE_KEY = 'numbernavigator.timedClickInterval';
 const DEFAULT_KEY_TIMEOUT_MS = 1000;
 const DEFAULT_FOLLOW_SIZE_PX = 320;
 const DEFAULT_TIMED_CLICK_INTERVAL_SEC = 2;
-/** Show/hide command number: 0 and 1 are scrolling, and only 0-200 can be recognised by voice. */
+const DEFAULT_SCROLL_DOWN_NUMBER = 0;
+const DEFAULT_SCROLL_UP_NUMBER = 1;
 const DEFAULT_TOGGLE_NUMBER = 99;
-const MIN_TOGGLE_NUMBER = 2;
-const MAX_TOGGLE_NUMBER = MAX_SPOKEN_NUMBER;
+const MIN_SPECIAL_NUMBER = 0;
+const MAX_SPECIAL_NUMBER = MAX_SPOKEN_NUMBER;
 const REFRESH_INTERVAL_MS = 3000;
+
+export type SpecialOption = 'scrollDown' | 'scrollUp' | 'toggle';
 
 @Component({
   selector: 'app-speech-to-number',
@@ -79,9 +84,11 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   /** Timed click mode: automatically click links after hovering. */
   readonly timedClickEnabled = signal(this.initialFlag(TIMED_CLICK_STORAGE_KEY, false));
   readonly timedClickIntervalSec = signal(this.initialTimedClickInterval());
-  /** Number that hides/shows the numbers (and the square). Reserved: no element receives it. */
-  readonly toggleNumber = signal(this.initialToggleNumber());
-  readonly toggleNumberError = signal<string | null>(null);
+  /** Special function command numbers. Reserved: no element receives them. */
+  readonly scrollDownNumber = signal(this.initialSpecialNumber(SCROLL_DOWN_STORAGE_KEY, DEFAULT_SCROLL_DOWN_NUMBER));
+  readonly scrollUpNumber = signal(this.initialSpecialNumber(SCROLL_UP_STORAGE_KEY, DEFAULT_SCROLL_UP_NUMBER));
+  readonly toggleNumber = signal(this.initialSpecialNumber(TOGGLE_NUMBER_STORAGE_KEY, DEFAULT_TOGGLE_NUMBER));
+  readonly specialNumberError = signal<string | null>(null);
   /** Numbers hidden: the extension keeps listening but only the toggle number works. Reset on Start/Stop. */
   readonly numbersHidden = signal(false);
 
@@ -184,17 +191,73 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     void this.refreshActiveTab();
   }
 
-  /** Settings field for the show/hide command number: validated, saved and sent to the page. */
-  onToggleNumberChange(input: HTMLInputElement): void {
+  getOtherReservedNumbers(option: SpecialOption): number[] {
+    const res: number[] = [];
+    if (option !== 'scrollDown') res.push(this.scrollDownNumber());
+    if (option !== 'scrollUp') res.push(this.scrollUpNumber());
+    if (option !== 'toggle') res.push(this.toggleNumber());
+    return res;
+  }
+
+  getOptionValue(option: SpecialOption): number {
+    if (option === 'scrollDown') return this.scrollDownNumber();
+    if (option === 'scrollUp') return this.scrollUpNumber();
+    return this.toggleNumber();
+  }
+
+  canStepOption(option: SpecialOption, delta: number): boolean {
+    const current = this.getOptionValue(option);
+    const otherReserved = this.getOtherReservedNumbers(option);
+    let next = current + delta;
+    while (next >= MIN_SPECIAL_NUMBER && next <= MAX_SPECIAL_NUMBER) {
+      if (!otherReserved.includes(next)) return true;
+      next += delta;
+    }
+    return false;
+  }
+
+  stepOption(option: SpecialOption, delta: number): void {
+    const current = this.getOptionValue(option);
+    const otherReserved = this.getOtherReservedNumbers(option);
+    let next = current + delta;
+    while (next >= MIN_SPECIAL_NUMBER && next <= MAX_SPECIAL_NUMBER) {
+      if (!otherReserved.includes(next)) {
+        this.setOptionValue(option, next);
+        return;
+      }
+      next += delta;
+    }
+  }
+
+  onSpecialNumberChange(option: SpecialOption, input: HTMLInputElement): void {
     const value = Number(input.value);
-    if (input.value.trim() === '' || !Number.isInteger(value) || value < MIN_TOGGLE_NUMBER || value > MAX_TOGGLE_NUMBER) {
-      this.toggleNumberError.set(this.i18n.t('toggleNumberError', { min: MIN_TOGGLE_NUMBER, max: MAX_TOGGLE_NUMBER }));
-      input.value = String(this.toggleNumber());
+    const otherReserved = this.getOtherReservedNumbers(option);
+    if (input.value.trim() === '' || !Number.isInteger(value) || value < MIN_SPECIAL_NUMBER || value > MAX_SPECIAL_NUMBER) {
+      this.specialNumberError.set(this.i18n.t('optionNumberError', { min: MIN_SPECIAL_NUMBER, max: MAX_SPECIAL_NUMBER }));
+      input.value = String(this.getOptionValue(option));
       return;
     }
-    this.toggleNumberError.set(null);
-    this.toggleNumber.set(value);
-    try { localStorage.setItem(TOGGLE_NUMBER_STORAGE_KEY, String(value)); } catch { /* ignore */ }
+    if (otherReserved.includes(value)) {
+      this.specialNumberError.set(this.i18n.t('optionNumberDuplicateError'));
+      input.value = String(this.getOptionValue(option));
+      return;
+    }
+    this.specialNumberError.set(null);
+    this.setOptionValue(option, value);
+  }
+
+  private setOptionValue(option: SpecialOption, value: number): void {
+    this.specialNumberError.set(null);
+    if (option === 'scrollDown') {
+      this.scrollDownNumber.set(value);
+      try { localStorage.setItem(SCROLL_DOWN_STORAGE_KEY, String(value)); } catch { /* ignore */ }
+    } else if (option === 'scrollUp') {
+      this.scrollUpNumber.set(value);
+      try { localStorage.setItem(SCROLL_UP_STORAGE_KEY, String(value)); } catch { /* ignore */ }
+    } else {
+      this.toggleNumber.set(value);
+      try { localStorage.setItem(TOGGLE_NUMBER_STORAGE_KEY, String(value)); } catch { /* ignore */ }
+    }
     void this.refreshActiveTab();
   }
 
@@ -327,8 +390,12 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
   };
 
   private async runCommand(n: number): Promise<void> {
-    const message = n === 0 ? { action: 'scrollDown' } : n === 1 ? { action: 'scrollUp' } : { action: 'clickElement', number: n };
-    const label = n === 0 ? this.i18n.t('scrolledDownSuccess') : n === 1 ? this.i18n.t('scrolledUpSuccess') : this.i18n.t('clickedSuccess', { num: n });
+    const message = n === this.scrollDownNumber() ? { action: 'scrollDown' }
+                  : n === this.scrollUpNumber() ? { action: 'scrollUp' }
+                  : { action: 'clickElement', number: n };
+    const label = n === this.scrollDownNumber() ? this.i18n.t('scrolledDownSuccess')
+                : n === this.scrollUpNumber() ? this.i18n.t('scrolledUpSuccess')
+                : this.i18n.t('clickedSuccess', { num: n });
     const response = await this.sendToActiveTab(message);
     if (response?.status === 'Clicked' || response?.status === 'Scrolled down' || response?.status === 'Scrolled up') {
       this.feedback.set({ kind: 'ok', text: label });
@@ -363,6 +430,8 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
       keyTimeout: this.keyTimeoutMs(),
       followCursor: this.followCursor(),
       followSize: this.followSizePx(),
+      scrollDownNumber: this.scrollDownNumber(),
+      scrollUpNumber: this.scrollUpNumber(),
       toggleNumber: this.toggleNumber(),
       numbersHidden: this.numbersHidden(),
       timedClick: this.timedClickEnabled(),
@@ -414,12 +483,15 @@ export class SpeechToNumberComponent implements OnInit, OnDestroy {
     return DEFAULT_KEY_TIMEOUT_MS;
   }
 
-  private initialToggleNumber(): number {
+  private initialSpecialNumber(key: string, defaultValue: number): number {
     try {
-      const saved = Number(localStorage.getItem(TOGGLE_NUMBER_STORAGE_KEY));
-      if (Number.isInteger(saved) && saved >= MIN_TOGGLE_NUMBER && saved <= MAX_TOGGLE_NUMBER) return saved;
+      const item = localStorage.getItem(key);
+      if (item !== null) {
+        const saved = Number(item);
+        if (Number.isInteger(saved) && saved >= MIN_SPECIAL_NUMBER && saved <= MAX_SPECIAL_NUMBER) return saved;
+      }
     } catch { /* ignore */ }
-    return DEFAULT_TOGGLE_NUMBER;
+    return defaultValue;
   }
 
   private initialFollowSize(): number {

@@ -32,7 +32,7 @@
   if (w.__numberNavigatorLoaded) return; // avoid double injection (manifest + background)
   w.__numberNavigatorLoaded = true;
 
-  const FIRST_NUMBER = 2;
+  const FIRST_NUMBER = 0;
   const LAST_NUMBER = 200;
   const REFRESH_DEBOUNCE_MS = 150;
   const SCROLL_FRACTION = 0.8;
@@ -45,7 +45,9 @@
   const MIN_FOLLOW_SIZE_PX = 100;
   const MAX_FOLLOW_SIZE_PX = 1200;
   const FOLLOW_REFRESH_MS = 90;
-  /** Show/hide numbers: default command number, offset of the red dot from the pointer, race guard. */
+  /** Command numbers: defaults, offset of the red dot from the pointer, race guard. */
+  const DEFAULT_SCROLL_DOWN_NUMBER = 0;
+  const DEFAULT_SCROLL_UP_NUMBER = 1;
   const DEFAULT_TOGGLE_NUMBER = 99;
   const DOT_OFFSET_PX = 14;
   const LOCAL_TOGGLE_GRACE_MS = 800;
@@ -114,7 +116,9 @@
   let hoveredLinkEl: HTMLElement | null = null;
   let hoverTimer: number | undefined;
 
-  // show/hide numbers ("toggle number")
+  // special command numbers
+  let scrollDownNumber = DEFAULT_SCROLL_DOWN_NUMBER;
+  let scrollUpNumber = DEFAULT_SCROLL_UP_NUMBER;
   let toggleNumber = DEFAULT_TOGGLE_NUMBER;
   let numbersHidden = false;
   let lastLocalToggleAt = 0;
@@ -303,8 +307,12 @@
     });
   }
 
+  function isReservedNumber(n: number): boolean {
+    return n === scrollDownNumber || n === scrollUpNumber || n === toggleNumber;
+  }
+
   function nextFreeNumber(): number | null {
-    for (let n = FIRST_NUMBER; n <= LAST_NUMBER; n++) if (n !== toggleNumber && !byNumber.has(n)) return n;
+    for (let n = FIRST_NUMBER; n <= LAST_NUMBER; n++) if (!isReservedNumber(n) && !byNumber.has(n)) return n;
     return null;
   }
 
@@ -392,6 +400,9 @@
     setKeyboard(false);
     setFollowCursor(false);
     setTimedClick(false);
+    scrollDownNumber = DEFAULT_SCROLL_DOWN_NUMBER;
+    scrollUpNumber = DEFAULT_SCROLL_UP_NUMBER;
+    toggleNumber = DEFAULT_TOGGLE_NUMBER;
     numbersHidden = false;
     lastLocalToggleAt = 0;
     removeDot();
@@ -442,7 +453,7 @@
   }
 
   function checkTimedClickHover(ev: MouseEvent): void {
-    if (!timedClickEnabled || !active) return;
+    if (!timedClickEnabled || !active || numbersHidden) return;
     const target = ev.target instanceof HTMLElement ? ev.target : null;
     const link = target ? target.closest<HTMLElement>('a[href], [role="link"]') : null;
 
@@ -561,17 +572,36 @@
     dotEl.style.top = Math.max(0, Math.min(y + DOT_OFFSET_PX, innerHeight - 14)) + 'px';
   }
 
-  /** Sets the reserved number. An element that already holds it is renumbered at the next refresh. */
-  function setToggleNumber(n: unknown): void {
-    if (typeof n !== 'number' || !Number.isInteger(n) || n < FIRST_NUMBER || n > LAST_NUMBER || n === toggleNumber) return;
-    toggleNumber = n;
-    const clash = byNumber.get(n);
-    if (clash) removeEntry(clash);
+  /** Sets the special command numbers. Elements holding reserved numbers are renumbered. */
+  function setSpecialNumbers(down: unknown, up: unknown, toggle: unknown): void {
+    let changed = false;
+    if (typeof down === 'number' && Number.isInteger(down) && down >= FIRST_NUMBER && down <= LAST_NUMBER && down !== scrollDownNumber) {
+      scrollDownNumber = down;
+      changed = true;
+    }
+    if (typeof up === 'number' && Number.isInteger(up) && up >= FIRST_NUMBER && up <= LAST_NUMBER && up !== scrollUpNumber) {
+      scrollUpNumber = up;
+      changed = true;
+    }
+    if (typeof toggle === 'number' && Number.isInteger(toggle) && toggle >= FIRST_NUMBER && toggle <= LAST_NUMBER && toggle !== toggleNumber) {
+      toggleNumber = toggle;
+      changed = true;
+    }
+    if (changed) {
+      for (const e of Array.from(entries.values())) {
+        if (isReservedNumber(e.number)) removeEntry(e);
+      }
+    }
   }
 
   function setNumbersHidden(hidden: boolean, announce: boolean): void {
     if (hidden === numbersHidden) return;
     numbersHidden = hidden;
+    if (hidden && hoverTimer !== undefined) {
+      window.clearTimeout(hoverTimer);
+      hoverTimer = undefined;
+      hoveredLinkEl = null;
+    }
     resetKeyBuffer();
     updateMouseTracking();
     if (announce) toast(hidden ? `Numbers hidden – say or type ${toggleNumber} to show them` : 'Numbers shown', false, 2600);
@@ -637,8 +667,11 @@
       const text = String(n);
       if (text.length > prefix.length && text.startsWith(prefix)) return true;
     }
-    const toggleText = String(toggleNumber); // the toggle number is a valid number too
-    return toggleText.length > prefix.length && toggleText.startsWith(prefix);
+    for (const special of [toggleNumber, scrollDownNumber, scrollUpNumber]) {
+      const text = String(special);
+      if (text.length > prefix.length && text.startsWith(prefix)) return true;
+    }
+    return false;
   }
 
   function commitKeyBuffer(): void {
@@ -646,8 +679,8 @@
     resetKeyBuffer();
     if (Number.isNaN(n)) return;
     if (n === toggleNumber) { toggleNumbersLocally(); return; }
-    if (n === 0) scroll(1);
-    else if (n === 1) scroll(-1);
+    if (n === scrollDownNumber) scroll(1);
+    else if (n === scrollUpNumber) scroll(-1);
     else clickNumber(n);
   }
 
@@ -777,6 +810,8 @@
 
   function clickNumber(n: number): { status: string; message?: string; number?: number } {
     if (numbersHidden) return { status: 'Error', message: `Numbers are hidden – say ${toggleNumber} to show them` };
+    if (n === scrollDownNumber) return scroll(1);
+    if (n === scrollUpNumber) return scroll(-1);
     const e = byNumber.get(n);
     if (!e) { toast(`No element numbered ${n}`, true); return { status: 'Error', message: `No element numbered ${n}` }; }
     const el = e.element;
@@ -830,7 +865,7 @@
       switch (request.action) {
         case 'numberClickables': // also used as keep-alive / refresh by the controller
           setFollowCursor(!!request.followCursor, request.followSize); // before activate(): it refreshes the numbers
-          setToggleNumber(request.toggleNumber);
+          setSpecialNumbers(request.scrollDownNumber, request.scrollUpNumber, request.toggleNumber);
           // The controller owns the show/hide state (it survives tab changes); ignore its echo of a toggle just made here
           if (Date.now() - lastLocalToggleAt > LOCAL_TOGGLE_GRACE_MS) setNumbersHidden(!!request.numbersHidden, active);
           activate();
