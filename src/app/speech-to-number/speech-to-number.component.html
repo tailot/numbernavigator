@@ -97,6 +97,25 @@
   </fieldset>
 
   <fieldset class="methods">
+    <legend>{{ i18n.t('timedClickLegend') }}</legend>
+    <label class="check">
+      <input type="checkbox" [checked]="timedClickEnabled()" (change)="onTimedClickToggle($any($event.target).checked)">
+      {{ i18n.t('timedClickCheckbox') }}
+    </label>
+    @if (timedClickEnabled()) {
+      <label class="language">
+        {{ i18n.t('timedClickIntervalLabel') }}
+        <select [value]="timedClickIntervalSec()" (change)="onTimedClickIntervalChange($any($event.target).value)">
+          @for (opt of timedClickOptions; track opt.sec) {
+            <option [value]="opt.sec" [selected]="opt.sec === timedClickIntervalSec()">{{ i18n.t(opt.labelKey) }}</option>
+          }
+        </select>
+      </label>
+    }
+    <p class="hint">{{ i18n.t('timedClickHint') }}</p>
+  </fieldset>
+
+  <fieldset class="methods">
     <legend>{{ i18n.t('commandNumberLegend') }}</legend>
     <label class="language">
       {{ i18n.t('commandNumberLabel') }}

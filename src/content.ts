@@ -108,6 +108,12 @@
   let extraDirty = true; // the (costly) cursor-pointer scan is redone only after page/viewport changes
   let pointerCache: HTMLElement[] = [];
 
+  // timed click on hover
+  let timedClickEnabled = false;
+  let timedClickIntervalSec = 2;
+  let hoveredLinkEl: HTMLElement | null = null;
+  let hoverTimer: number | undefined;
+
   // show/hide numbers ("toggle number")
   let toggleNumber = DEFAULT_TOGGLE_NUMBER;
   let numbersHidden = false;
@@ -385,6 +391,7 @@
     active = false;
     setKeyboard(false);
     setFollowCursor(false);
+    setTimedClick(false);
     numbersHidden = false;
     lastLocalToggleAt = 0;
     removeDot();
@@ -434,10 +441,40 @@
     positionLens();
   }
 
+  function checkTimedClickHover(ev: MouseEvent): void {
+    if (!timedClickEnabled || !active) return;
+    const target = ev.target instanceof HTMLElement ? ev.target : null;
+    const link = target ? target.closest<HTMLElement>('a[href], [role="link"]') : null;
+
+    if (link === hoveredLinkEl) return;
+
+    if (hoverTimer !== undefined) {
+      window.clearTimeout(hoverTimer);
+      hoverTimer = undefined;
+    }
+
+    hoveredLinkEl = link;
+
+    if (link) {
+      const intervalMs = Math.max(500, timedClickIntervalSec * 1000);
+      hoverTimer = window.setTimeout(() => {
+        if (hoveredLinkEl === link && link.isConnected && active) {
+          flash(link);
+          pressElement(link);
+          toast('Timed click');
+          scheduleRefresh(350);
+        }
+        hoveredLinkEl = null;
+        hoverTimer = undefined;
+      }, intervalMs);
+    }
+  }
+
   function onMouseMove(ev: MouseEvent): void {
     cursorX = ev.clientX;
     cursorY = ev.clientY;
     cursorKnown = true;
+    checkTimedClickHover(ev);
     if (followRaf) return;
     followRaf = window.requestAnimationFrame(() => {
       followRaf = 0;
@@ -450,6 +487,20 @@
         followRefreshTimer = window.setTimeout(() => { followRefreshTimer = undefined; refresh(); }, FOLLOW_REFRESH_MS);
       }
     });
+  }
+
+  function setTimedClick(enabled: boolean, intervalSec?: number): void {
+    if (typeof intervalSec === 'number' && intervalSec >= 1 && intervalSec <= 60) {
+      timedClickIntervalSec = intervalSec;
+    }
+    if (enabled === timedClickEnabled) return;
+    timedClickEnabled = enabled;
+    if (!enabled && hoverTimer !== undefined) {
+      window.clearTimeout(hoverTimer);
+      hoverTimer = undefined;
+      hoveredLinkEl = null;
+    }
+    updateMouseTracking();
   }
 
   /** Turns the mode on/off and sets the side of the square. The caller refreshes the numbers afterwards. */
@@ -468,9 +519,9 @@
     updateMouseTracking();
   }
 
-  /** The mouse listener is needed by the follow-cursor square and by the red "numbers hidden" dot. */
+  /** The mouse listener is needed by follow-cursor, numbers hidden dot, and timed click hover. */
   function updateMouseTracking(): void {
-    const needed = followCursor || numbersHidden;
+    const needed = followCursor || numbersHidden || timedClickEnabled;
     if (needed && !mouseTracked) {
       window.addEventListener('mousemove', onMouseMove, { capture: true, passive: true });
       mouseTracked = true;
@@ -479,6 +530,11 @@
       mouseTracked = false;
       window.cancelAnimationFrame(followRaf);
       followRaf = 0;
+      if (hoverTimer !== undefined) {
+        window.clearTimeout(hoverTimer);
+        hoverTimer = undefined;
+        hoveredLinkEl = null;
+      }
     }
   }
 
@@ -779,6 +835,7 @@
           if (Date.now() - lastLocalToggleAt > LOCAL_TOGGLE_GRACE_MS) setNumbersHidden(!!request.numbersHidden, active);
           activate();
           setKeyboard(!!request.keyboard, request.keyTimeout);
+          setTimedClick(!!request.timedClick, request.timedClickInterval);
           sendResponse({ status: 'Clickables numbered', count: entries.size });
           break;
         case 'clickElement':
