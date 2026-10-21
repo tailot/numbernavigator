@@ -145,4 +145,69 @@ describe('content script clicking', () => {
       done();
     });
   });
+
+  it('should pause timed click when numbers are hidden', (done) => {
+    jasmine.clock().install();
+
+    const link = document.createElement('a');
+    link.href = '#test-hidden';
+    link.textContent = 'Hover Me Link Hidden';
+    link.style.position = 'fixed';
+    link.style.top = '20px';
+    link.style.left = '20px';
+    link.style.width = '100px';
+    link.style.height = '40px';
+    link.style.display = 'block';
+
+    document.body.appendChild(link);
+    createdElements.push(link);
+
+    let clicked = false;
+    link.addEventListener('click', (e) => { e.preventDefault(); clicked = true; });
+
+    sendMessage({ action: 'numberClickables', timedClick: true, timedClickInterval: 1, numbersHidden: true }).then(() => {
+      const mouseMoveEv = new MouseEvent('mousemove', {
+        bubbles: true,
+        cancelable: true,
+        clientX: 25,
+        clientY: 25,
+      });
+      Object.defineProperty(mouseMoveEv, 'target', { value: link });
+
+      window.dispatchEvent(mouseMoveEv);
+
+      jasmine.clock().tick(1500);
+
+      expect(clicked).toBeFalse();
+      jasmine.clock().uninstall();
+      done();
+    });
+  });
+
+  it('should skip reserved numbers when assigning element numbers', async () => {
+    const btn1 = document.createElement('button');
+    btn1.textContent = 'Btn 1';
+    btn1.style.position = 'fixed';
+    btn1.style.top = '20px';
+    btn1.style.left = '20px';
+    btn1.style.width = '50px';
+    btn1.style.height = '30px';
+
+    document.body.appendChild(btn1);
+    createdElements.push(btn1);
+
+    // Set reserved numbers: scrollDown=0, scrollUp=1, toggle=2
+    await sendMessage({
+      action: 'numberClickables',
+      scrollDownNumber: 0,
+      scrollUpNumber: 1,
+      toggleNumber: 2
+    });
+
+    // Element assignment should skip 0, 1, 2 and assign number 3 to btn1!
+    const res = await sendMessage({ action: 'clickElement', number: 3 });
+    expect(res).not.toBeNull();
+    expect(res.status).toBe('Clicked');
+    expect(res.number).toBe(3);
+  });
 });

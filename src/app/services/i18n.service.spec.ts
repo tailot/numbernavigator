@@ -43,8 +43,8 @@ describe('I18nService', () => {
 
   it('should replace interpolation parameters in t() method', () => {
     service.setLanguage('en');
-    const result = service.t('toggleNumberError', { min: 2, max: 200 });
-    expect(result).toBe('Enter a whole number from 2 to 200 (0 and 1 are used for scrolling).');
+    const result = service.t('toggleNumberError', { min: 0, max: 200 });
+    expect(result).toBe('Enter a whole number from 0 to 200 not assigned to another function.');
   });
 
   it('should save selected language to localStorage', () => {
@@ -65,13 +65,14 @@ describe('I18nService', () => {
       'followCursorCheckbox', 'squareSizeLabel', 'squareSmall', 'squareMedium', 'squareLarge',
       'squareExtraLarge', 'followCursorHintOn', 'followCursorHintOff', 'timedClickLegend',
       'timedClickCheckbox', 'timedClickIntervalLabel', 'timedClick1s', 'timedClick2s',
-      'timedClick3s', 'timedClick5s', 'timedClick10s', 'timedClickHint', 'commandNumberLegend',
-      'commandNumberLabel', 'toggleNumberError', 'commandNumberHint', 'switchTabNotice',
-      'heardText', 'notANumber', 'numbersHiddenNotice', 'numbersHiddenSuccess',
-      'numbersHiddenSuccessKeyboard', 'numbersShownSuccess', 'scrolledDownSuccess',
+      'timedClick3s', 'timedClick5s', 'timedClick10s', 'timedClickHint', 'scrollCommandsLegend',
+      'scrollDownLabel', 'scrollUpLabel', 'scrollCommandsHint', 'commandNumberLegend',
+      'commandNumberLabel', 'toggleNumberError', 'optionNumberError', 'optionNumberDuplicateError',
+      'commandNumberHint', 'switchTabNotice', 'heardText', 'notANumber', 'numbersHiddenNotice',
+      'numbersHiddenSuccess', 'numbersHiddenSuccessKeyboard', 'numbersShownSuccess', 'scrolledDownSuccess',
       'scrolledUpSuccess', 'clickedSuccess', 'openWebsiteError', 'pageNoResponseError',
       'commandsHeading', 'thSayOrType', 'thEffect', 'cmdNumber', 'cmdNumberEffect',
-      'cmdZero', 'cmdZeroEffect', 'cmdOne', 'cmdOneEffect', 'cmdToggleNumber',
+      'cmdZeroEffect', 'cmdOneEffect', 'cmdToggleNumber',
       'cmdToggleEffect', 'step1', 'step2', 'step3', 'goodToKnowSummary', 'goodToKnowDetails'
     ];
 

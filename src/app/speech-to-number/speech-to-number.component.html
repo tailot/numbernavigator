@@ -219,6 +219,38 @@
     </div>
   </section>
 
+  <!-- Scroll Commands Card -->
+  <section class="card">
+    <div class="card-header">
+      <span class="card-icon">📜</span>
+      <h2>{{ i18n.t('scrollCommandsLegend') }}</h2>
+    </div>
+
+    <div class="card-body">
+      <div class="form-group">
+        <label class="form-label" for="scroll-down-input">{{ i18n.t('scrollDownLabel') }}</label>
+        <div class="stepper-control">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('scrollDown', -1)" (click)="stepOption('scrollDown', -1)" aria-label="Decrement">-</button>
+          <input id="scroll-down-input" #scrollDownInput type="number" min="0" max="200" step="1" [value]="scrollDownNumber()"
+                 (change)="onSpecialNumberChange('scrollDown', scrollDownInput)" class="modern-input stepper-input">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('scrollDown', 1)" (click)="stepOption('scrollDown', 1)" aria-label="Increment">+</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="scroll-up-input">{{ i18n.t('scrollUpLabel') }}</label>
+        <div class="stepper-control">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('scrollUp', -1)" (click)="stepOption('scrollUp', -1)" aria-label="Decrement">-</button>
+          <input id="scroll-up-input" #scrollUpInput type="number" min="0" max="200" step="1" [value]="scrollUpNumber()"
+                 (change)="onSpecialNumberChange('scrollUp', scrollUpInput)" class="modern-input stepper-input">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('scrollUp', 1)" (click)="stepOption('scrollUp', 1)" aria-label="Increment">+</button>
+        </div>
+      </div>
+
+      <p class="hint">{{ i18n.t('scrollCommandsHint') }}</p>
+    </div>
+  </section>
+
   <!-- Command Number Card -->
   <section class="card">
     <div class="card-header">
@@ -229,11 +261,15 @@
     <div class="card-body">
       <div class="form-group">
         <label class="form-label" for="toggle-input">{{ i18n.t('commandNumberLabel') }}</label>
-        <input id="toggle-input" #toggleInput type="number" min="2" max="200" step="1" [value]="toggleNumber()"
-               (change)="onToggleNumberChange(toggleInput)" aria-describedby="toggle-hint" class="modern-input">
+        <div class="stepper-control">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('toggle', -1)" (click)="stepOption('toggle', -1)" aria-label="Decrement">-</button>
+          <input id="toggle-input" #toggleInput type="number" min="0" max="200" step="1" [value]="toggleNumber()"
+                 (change)="onSpecialNumberChange('toggle', toggleInput)" aria-describedby="toggle-hint" class="modern-input stepper-input">
+          <button type="button" class="stepper-btn" [disabled]="!canStepOption('toggle', 1)" (click)="stepOption('toggle', 1)" aria-label="Increment">+</button>
+        </div>
       </div>
-      @if (toggleNumberError()) {
-        <p class="hint error-text" role="alert">{{ toggleNumberError() }}</p>
+      @if (specialNumberError()) {
+        <p class="hint error-text" role="alert">{{ specialNumberError() }}</p>
       }
       <p class="hint" id="toggle-hint">{{ i18n.t('commandNumberHint') }}</p>
     </div>
@@ -291,11 +327,11 @@
               <td>{{ i18n.t('cmdNumberEffect') }}</td>
             </tr>
             <tr>
-              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdZero') }}</kbd></td>
+              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdScrollDown', { num: scrollDownNumber() }) }}</kbd></td>
               <td>{{ i18n.t('cmdZeroEffect') }}</td>
             </tr>
             <tr>
-              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdOne') }}</kbd></td>
+              <td><kbd class="cmd-badge highlight">{{ i18n.t('cmdScrollUp', { num: scrollUpNumber() }) }}</kbd></td>
               <td>{{ i18n.t('cmdOneEffect') }}</td>
             </tr>
             <tr>

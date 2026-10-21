@@ -12,6 +12,9 @@ describe('SpeechToNumberComponent', () => {
     localStorage.removeItem('numbernavigator.voice');
     localStorage.removeItem('numbernavigator.keyboard');
     localStorage.removeItem('numbernavigator.keyTimeout');
+    localStorage.removeItem('numbernavigator.scrollDownNumber');
+    localStorage.removeItem('numbernavigator.scrollUpNumber');
+    localStorage.removeItem('numbernavigator.toggleNumber');
     await TestBed.configureTestingModule({
       imports: [SpeechToNumberComponent],
       providers: [provideZonelessChangeDetection()]
@@ -93,5 +96,34 @@ describe('SpeechToNumberComponent', () => {
     component.onKeyboardToggle(true);
     component.onVoiceToggle(false);
     expect(component.canStart()).toBeTrue();
+  });
+
+  it('should initialize special command numbers to defaults and load saved values', () => {
+    expect(component.scrollDownNumber()).toBe(0);
+    expect(component.scrollUpNumber()).toBe(1);
+    expect(component.toggleNumber()).toBe(99);
+  });
+
+  it('should step option values while skipping duplicate numbers assigned to other options', () => {
+    // Current: scrollDown=0, scrollUp=1, toggle=99
+    // Stepping scrollDown UP (+1): 0 + 1 = 1 is reserved by scrollUp, so it must skip to 2!
+    component.stepOption('scrollDown', 1);
+    expect(component.scrollDownNumber()).toBe(2);
+    expect(localStorage.getItem('numbernavigator.scrollDownNumber')).toBe('2');
+
+    // Stepping scrollUp DOWN (-1): 1 - 1 = 0 is reserved by scrollDown (0 is free now because scrollDown is 2)
+    component.stepOption('scrollUp', -1);
+    expect(component.scrollUpNumber()).toBe(0);
+  });
+
+  it('should prevent duplicate assignment when typed manually', () => {
+    // Current: scrollDown=0, scrollUp=1, toggle=99
+    const dummyInput = document.createElement('input');
+    dummyInput.value = '1'; // Attempt to set scrollDown to 1 (which is assigned to scrollUp)
+
+    component.onSpecialNumberChange('scrollDown', dummyInput);
+    expect(component.scrollDownNumber()).toBe(0); // unchanged
+    expect(component.specialNumberError()).toBeTruthy();
+    expect(dummyInput.value).toBe('0'); // reverted
   });
 });
